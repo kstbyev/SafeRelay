@@ -22,6 +22,8 @@
 		04D623E22DB7701900000853 /* SafeRelayViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623E12DB7701900000853 /* SafeRelayViewModel.swift */; };
 		04E7BEFB2DB913D1008E5753 /* SensitiveData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BEFA2DB913D1008E5753 /* SensitiveData.swift */; };
 		04E7BEFD2DBA3D1D008E5753 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */; };
+		04E7BF012DBB177E008E5753 /* CryptoTokenKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */; };
+		04E7BF022DBB177E008E5753 /* CryptoKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E7BF002DBB177E008E5753 /* CryptoKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +45,8 @@
 		04D623E12DB7701900000853 /* SafeRelayViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafeRelayViewModel.swift; sourceTree = "<group>"; };
 		04E7BEFA2DB913D1008E5753 /* SensitiveData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SensitiveData.swift; sourceTree = "<group>"; };
 		04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoTokenKit.framework; path = System/Library/Frameworks/CryptoTokenKit.framework; sourceTree = SDKROOT; };
+		04E7BF002DBB177E008E5753 /* CryptoKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoKit.framework; path = System/Library/Frameworks/CryptoKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +54,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04E7BF022DBB177E008E5753 /* CryptoKit.framework in Frameworks */,
+				04E7BF012DBB177E008E5753 /* CryptoTokenKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,6 +68,7 @@
 				0413A18E2DB6A78200856811 /* Preview Content */,
 				0413A1772DB6A50500856811 /* SafeRelay */,
 				0413A1762DB6A50500856811 /* Products */,
+				04E7BEFE2DBB177E008E5753 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,6 +133,15 @@
 				04D623E12DB7701900000853 /* SafeRelayViewModel.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		04E7BEFE2DBB177E008E5753 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				04E7BF002DBB177E008E5753 /* CryptoKit.framework */,
+				04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
