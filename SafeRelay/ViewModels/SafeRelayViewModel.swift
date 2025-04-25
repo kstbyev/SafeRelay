@@ -139,7 +139,7 @@ class SafeRelayViewModel: ObservableObject {
         } else {
             // No sensitive data or already handled
             print("--- DEBUG: No sensitive data detected or handled, sending directly ---")
-            createAndSaveMessage(content: content, tokenizedContent: nil, tokens: [:])
+            createAndSaveMessage(content: content, tokenizedContent: nil, tokens: [:], originalFilename: nil)
             return true // Message sent directly
         }
     }
@@ -166,24 +166,28 @@ class SafeRelayViewModel: ObservableObject {
         print("Output tokens: \(sensitiveDataTokens)") // Print the stored tokens
         
         print("--- DEBUG: Creating message (tokenized) ---")
-        createAndSaveMessage(content: content, tokenizedContent: tokenizedText, tokens: result.tokens)
+        createAndSaveMessage(content: content, tokenizedContent: tokenizedText, tokens: result.tokens, originalFilename: nil)
     }
     
     // --- Helper for Creating and Saving --- 
-    private func createAndSaveMessage(content: String, tokenizedContent: String?, tokens: [String: String]) {
+    private func createAndSaveMessage(content: String, tokenizedContent: String?, tokens: [String: String], primaryPartURLString: String? = nil, secondaryPackageURLString: String? = nil, transferID: String? = nil, originalFilename: String? = nil) {
         // Enforce encryption on Maximum level
         let encrypted = (securityLevel == .maximum) ? true : isEncryptionEnabled
         
-        // Use the custom init defined in SecureMessage, which handles id and timestamp internally
+        // Use the updated memberwise initializer for SecureMessage
         let message = SecureMessage(
             content: content,
             isEncrypted: encrypted,
-            tokenizedContent: tokenizedContent
-            // id, timestamp, and fileParts are set by the custom init
+            tokenizedContent: tokenizedContent,
+            primaryPartURLString: primaryPartURLString,
+            secondaryPackageURLString: secondaryPackageURLString,
+            transferID: transferID, // Pass the ID to the initializer
+            originalFilename: originalFilename // Pass the original filename (now optional)
+            // Uses default values for id and timestamp from init
         )
         
         // Store original values mapped by token
-        if let tc = tokenizedContent {
+        if tokenizedContent != nil {
             sensitiveDataTokens.merge(tokens) { (_, new) in new }
         }
 
@@ -203,6 +207,13 @@ class SafeRelayViewModel: ObservableObject {
     func sendFile(_ fileURL: URL) async {
         isLoading = true
         defer { isLoading = false }
+        
+        // Disable file sending at standard security level
+        if securityLevel == .standard {
+            alertMessage = "File sending is only available at Enhanced or Maximum security levels."
+            showAlert = true
+            return
+        }
         
         // Enforce settings for Maximum level
         let shouldSplit = (securityLevel == .maximum) ? true : splitFiles
@@ -249,14 +260,15 @@ class SafeRelayViewModel: ObservableObject {
                  return
             }
             
-            // Create the message entry, passing the transferID
+            // Create the message entry, passing the transferID and original filename
             createAndSaveMessage(
                 content: messageContent,
                 tokenizedContent: nil,
                 tokens: [:],
                 primaryPartURLString: primaryURLString,
                 secondaryPackageURLString: secondaryURLString,
-                transferID: currentTransferID // Pass the ID
+                transferID: currentTransferID, // Pass the ID
+                originalFilename: fileURL.lastPathComponent // <-- Pass the original filename
             )
             
             // Show confirmation / instruction alert
@@ -269,40 +281,6 @@ class SafeRelayViewModel: ObservableObject {
             alertType = nil
             showAlert = true
         }
-    }
-    
-    // --- Helper for Creating and Saving (needs update for new properties) --- 
-    private func createAndSaveMessage(content: String, tokenizedContent: String?, tokens: [String: String], primaryPartURLString: String? = nil, secondaryPackageURLString: String? = nil, transferID: String? = nil) {
-        // Enforce encryption on Maximum level
-        let encrypted = (securityLevel == .maximum) ? true : isEncryptionEnabled
-        
-        // Use the updated memberwise initializer for SecureMessage
-        let message = SecureMessage(
-            content: content,
-            isEncrypted: encrypted,
-            tokenizedContent: tokenizedContent,
-            primaryPartURLString: primaryPartURLString,
-            secondaryPackageURLString: secondaryPackageURLString,
-            transferID: transferID // Pass the ID to the initializer
-            // Uses default values for id and timestamp from init
-        )
-        
-        // Store original values mapped by token
-        if tokenizedContent != nil {
-            sensitiveDataTokens.merge(tokens) { (_, new) in new }
-        }
-
-        messages.append(message)
-        print("Created message - content: [\(message.content)], tokenized: [\(message.tokenizedContent ?? "nil")], encrypted: \(message.isEncrypted)")
-
-        // Uncomment saving to DB
-        if saveToDevice || securityLevel != .maximum { 
-            dbManager.saveMessage(message)
-            print("--- DEBUG: Message saved to DB (SaveToDevice: \(saveToDevice), Level: \(securityLevel)) ---")
-        } else {
-            print("--- DEBUG: Message NOT saved to DB (SaveToDevice: \(saveToDevice), Level: \(securityLevel)) ---")
-        }
-        print("--- DEBUG: Message appended to messages array ---")
     }
     
     private func extractURL(from text: String) -> String? {
@@ -352,6 +330,7 @@ class SafeRelayViewModel: ObservableObject {
             updatedMessage.decryptedFileURL = decryptedFileURL
             // Update the message in the array
             messages[index] = updatedMessage
+            print("--- DEBUG: updatedMessage.decryptedFileURL = \(updatedMessage.decryptedFileURL?.path ?? "nil") ---")
             // Update in database if needed
             if saveToDevice {
                 dbManager.saveMessage(updatedMessage)
@@ -364,5 +343,6 @@ class SafeRelayViewModel: ObservableObject {
 enum AlertType {
     case sensitiveData
     case phishing
+    case fileAlreadyProcessed
 }
 

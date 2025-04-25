@@ -11,6 +11,7 @@ struct SecureMessage: Identifiable, Codable {
     let secondaryPackageURLString: String?
     let transferID: String?
     var decryptedFileURL: URL?
+    var originalFilename: String?
     
     init(
         content: String,
@@ -19,7 +20,8 @@ struct SecureMessage: Identifiable, Codable {
         primaryPartURLString: String? = nil,
         secondaryPackageURLString: String? = nil,
         transferID: String? = nil,
-        decryptedFileURL: URL? = nil
+        decryptedFileURL: URL? = nil,
+        originalFilename: String? = nil
     ) {
         self.id = UUID()
         self.content = content
@@ -30,6 +32,7 @@ struct SecureMessage: Identifiable, Codable {
         self.secondaryPackageURLString = secondaryPackageURLString
         self.transferID = transferID
         self.decryptedFileURL = decryptedFileURL
+        self.originalFilename = originalFilename
     }
     
     func encrypt() -> SecureMessage {

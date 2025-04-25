@@ -101,16 +101,18 @@ class FileTransmissionService {
         let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
         print("--- FileService: Decryption successful. Decrypted data size: \(decryptedData.count) bytes ---")
 
-        // 5. Save decrypted data to a downloadable location
-        let downloadsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        // Attempt to reconstruct original filename (need to pass it somehow, or use transferID)
-        // For now, use a generic name
-        let originalFilename = primaryPartURL.lastPathComponent
+        // 5. Save decrypted data to Documents directory using the GENERATED filename
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        
+        // Reconstruct filename from primary part URL (as before)
+        let idAndOriginal = primaryPartURL.lastPathComponent
                                     .replacingOccurrences(of: "primary_", with: "")
                                     .replacingOccurrences(of: ".safeRelayPart", with: "")
-        let decryptedFilename = "decrypted_\(originalFilename)"
-        let decryptedFileURL = downloadsDirectory.appendingPathComponent(decryptedFilename)
+        let decryptedFilename = "decrypted_\(idAndOriginal)"
+        let decryptedFileURL = documentsDirectory.appendingPathComponent(decryptedFilename)
         
+        // Check if file already exists and handle potential name conflicts if needed
+        // For now, we overwrite
         try decryptedData.write(to: decryptedFileURL)
         print("--- FileService: Saved decrypted file to: \(decryptedFileURL.path) ---")
 
@@ -139,12 +141,14 @@ class FileTransmissionService {
         case accessDenied(String)
         case encryptionFailed(String)
         case fileNotFound(String)
+        case readError(String)
         
         var errorDescription: String? {
             switch self {
             case .accessDenied(let name): return "Access denied for file: \(name)"
             case .encryptionFailed(let reason): return "Encryption failed: \(reason)"
             case .fileNotFound(let name): return "Temporary file part not found: \(name)"
+            case .readError(let reason): return "Error reading file: \(reason)"
             }
         }
     }

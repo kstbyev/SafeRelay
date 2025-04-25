@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var tokenizedText = ""
     @State private var tokens = [:]
     @State private var shareablePackage: ShareableURL?
+    @State private var fileContentPreview: String?
     
     var body: some View {
         NavigationView {
@@ -38,7 +39,8 @@ struct ContentView: View {
                                 MessageBubble(
                                     message: message, 
                                     viewModel: viewModel,
-                                    shareablePackage: $shareablePackage
+                                    shareablePackage: $shareablePackage,
+                                    fileContentPreview: $fileContentPreview
                                 )
                                     .id(message.id)
                             }
@@ -112,10 +114,12 @@ struct ContentView: View {
                     
                     if isComposing {
                         HStack(spacing: 12) {
-                            Button(action: { showingFilePicker = true }) {
-                                Label("File", systemImage: "paperclip")
+                            if viewModel.securityLevel != .standard {
+                                Button(action: { showingFilePicker = true }) {
+                                    Label("File", systemImage: "paperclip")
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .buttonStyle(.bordered)
                             
                             Button(action: {
                                 viewModel.toggleEncryption()
@@ -207,6 +211,14 @@ struct ContentView: View {
                     }
                     Button("Cancel", role: .cancel) {}
                     
+                case .fileAlreadyProcessed:
+                    Button("Open File") {
+                        if let decryptedURL = viewModel.messages.first(where: { $0.transferID == viewModel.processingTransferIDs.first })?.decryptedFileURL {
+                            UIApplication.shared.open(decryptedURL)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                    
                 case .none:
                     Button("OK", role: .cancel) {}
                 }
@@ -282,14 +294,25 @@ struct ContentView: View {
         }
         let targetMessage = viewModel.messages[targetMessageIndex]
         
+        // --- Check if already reconstructed ---
+        if let decryptedURL = targetMessage.decryptedFileURL {
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping. ---")
+            // Show alert and offer to open the existing file
+            viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
+            viewModel.alertType = .fileAlreadyProcessed
+            viewModel.showAlert = true
+            return
+        }
+        // -------------------------------------
+        
         // Ensure primary part URL exists
         guard let primaryURLString = targetMessage.primaryPartURLString, 
               let primaryURL = URL(string: primaryURLString) else {
             print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
-             viewModel.alertMessage = "Primary file part information is missing or invalid."
-             viewModel.alertType = nil
-             viewModel.showAlert = true
-             return
+            viewModel.alertMessage = "Primary file part information is missing or invalid."
+            viewModel.alertType = nil
+            viewModel.showAlert = true
+            return
         }
         
         print("--- ContentView: Found matching message and primary URL. Starting reconstruction for \(transferID).")
@@ -301,56 +324,59 @@ struct ContentView: View {
                 // Ensure ID is removed from processing set when Task completes (success or error)
                 Task { @MainActor in
                     viewModel.processingTransferIDs.remove(transferID)
+                    viewModel.isLoading = false
                     print("--- ContentView: Removed transferID \(transferID) from processing set. ---")
                 }
             }
             
             do {
                 // Read the secondary package data
-                 guard url.startAccessingSecurityScopedResource() else {
-                     throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
-                 }
-                 let secondaryPackageData = try Data(contentsOf: url)
-                 url.stopAccessingSecurityScopedResource()
-                 
-                 // Call the reconstruction service
-                 let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
-                     primaryPartURL: primaryURL,
-                     secondaryPackageData: secondaryPackageData
-                 )
-                 
-                 // Success!
-                 await MainActor.run { // Ensure UI updates on main thread
-                      viewModel.isLoading = false
-                      print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
-                      
-                      // Update message with decrypted file URL
-                      viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
-                      
-                      // Show a quick alert that will auto-dismiss
-                      viewModel.alertMessage = "File successfully reconstructed!"
-                      viewModel.alertType = nil
-                      viewModel.showAlert = true
-                      
-                      // Auto-dismiss alert after 2 seconds
-                      Task {
-                          try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-                          viewModel.showAlert = false
-                      }
-                      
-                      print("--- ContentView: Message updated with decrypted file URL ---")
-                 }
-
+                guard url.startAccessingSecurityScopedResource() else {
+                    print("--- ContentView ERROR: Cannot access security scoped resource for URL: \(url.path)")
+                    throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
+                }
+                defer {
+                    url.stopAccessingSecurityScopedResource()
+                }
+                
+                let secondaryPackageData: Data
+                do {
+                    secondaryPackageData = try Data(contentsOf: url)
+                } catch {
+                    print("--- ContentView ERROR: Failed to read secondary package data: \(error.localizedDescription)")
+                    throw FileTransmissionService.FileError.readError(error.localizedDescription)
+                }
+                
+                // Call the reconstruction service
+                let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
+                    primaryPartURL: primaryURL,
+                    secondaryPackageData: secondaryPackageData
+                )
+                
+                // Success!
+                // Perform delay *before* switching to main actor for UI updates
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                
+                await MainActor.run {
+                    print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
+                    
+                    // Update message with decrypted file URL
+                    viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
+                    
+                    // Show a standard alert that the user dismisses
+                    viewModel.alertMessage = "File successfully reconstructed!"
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                    
+                    print("--- ContentView: Message updated with decrypted file URL (after delay) ---")
+                }
             } catch {
-                 // Handle errors
-                 await MainActor.run {
-                      viewModel.isLoading = false
-                      print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
-                      viewModel.alertMessage = "File reconstruction failed: \(error.localizedDescription)"
-                      viewModel.alertType = nil
-                      viewModel.showAlert = true
-                      // No need to remove transferID here, defer block handles it.
-                 }
+                await MainActor.run {
+                    print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
+                    viewModel.alertMessage = "Error processing file: \(error.localizedDescription)"
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                }
             }
         }
     }
@@ -391,6 +417,7 @@ struct MessageBubble: View {
     @State private var showingDetails = false
     @State private var hoveredToken: String?
     @Binding var shareablePackage: ShareableURL?
+    @Binding var fileContentPreview: String?
     
     private func getTokenColor(_ token: String) -> Color {
         if token.starts(with: "EMAIL_") { return .blue }
@@ -495,10 +522,26 @@ struct MessageBubble: View {
                 // Check if it's a file message with split parts
                 if message.primaryPartURLString != nil {
                     if let decryptedURL = message.decryptedFileURL {
-                        // File has been reconstructed - show Open button
+                        // File has been reconstructed - show Open button or preview
                         Button {
-                            print("--- DEBUG: Opening decrypted file: \(decryptedURL.path)")
-                            UIApplication.shared.open(decryptedURL)
+                            print("--- DEBUG: Attempting to preview/open decrypted file: \(decryptedURL.path)")
+                            // Try to read as text first
+                            do {
+                                // Check if it looks like a text file (simple check)
+                                if decryptedURL.pathExtension.lowercased() == "txt" || decryptedURL.pathExtension.lowercased() == "log" || decryptedURL.pathExtension.isEmpty { // Add other text extensions if needed
+                                    let content = try String(contentsOf: decryptedURL, encoding: .utf8)
+                                    fileContentPreview = content
+                                    print("--- DEBUG: Loaded text content for preview.")
+                                } else {
+                                    // Not a recognized text file, open externally
+                                    print("--- DEBUG: Not a text file, opening externally.")
+                                    UIApplication.shared.open(decryptedURL)
+                                }
+                            } catch {
+                                // Error reading or not text, open externally
+                                print("--- DEBUG: Error reading file as text or not text file, opening externally: \(error.localizedDescription)")
+                                UIApplication.shared.open(decryptedURL)
+                            }
                         } label: {
                             HStack(spacing: 2) {
                                 Image(systemName: "doc.fill")
@@ -541,6 +584,35 @@ struct MessageBubble: View {
                 }
             }
             .padding(.horizontal, 8)
+            
+            // --- ADDED: Text File Preview Area ---
+            if let preview = fileContentPreview {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("File Preview:")
+                            .font(.caption.bold())
+                        Spacer()
+                        Button {
+                            fileContentPreview = nil // Close preview
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    ScrollView {
+                        Text(preview)
+                            .font(.caption)
+                            .frame(maxHeight: 150) // Limit height
+                    }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
+            // -------------------------------------
+            
         }
         .sheet(isPresented: $showingDetails) {
             MessageDetailsView(message: message)
