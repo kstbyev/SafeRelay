@@ -55,7 +55,7 @@ class FileTransmissionService {
         
         // 6. Save parts to temporary directory using transferID in filenames
         let tempDir = FileManager.default.temporaryDirectory
-        let originalFilename = url.deletingPathExtension().lastPathComponent
+        let originalFilename = url.lastPathComponent // Keep the full filename with extension
         
         // Create unique URLs incorporating the transferID
         let primaryPartFilename = "primary_\(transferID)_\(originalFilename).safeRelayPart"
@@ -104,11 +104,18 @@ class FileTransmissionService {
         // 5. Save decrypted data to Documents directory using the GENERATED filename
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         
-        // Reconstruct filename from primary part URL (as before)
+        // Extract original filename and extension from primary part URL
         let idAndOriginal = primaryPartURL.lastPathComponent
-                                    .replacingOccurrences(of: "primary_", with: "")
-                                    .replacingOccurrences(of: ".safeRelayPart", with: "")
-        let decryptedFilename = "decrypted_\(idAndOriginal)"
+            .replacingOccurrences(of: "primary_", with: "")
+            .replacingOccurrences(of: ".safeRelayPart", with: "")
+        
+        // Split into name and extension
+        let components = idAndOriginal.split(separator: "_", maxSplits: 1)
+        let transferID = String(components[0])
+        let originalName = components.count > 1 ? String(components[1]) : ""
+        
+        // Create decrypted filename with original extension
+        let decryptedFilename = "decrypted_\(transferID)_\(originalName)"
         let decryptedFileURL = documentsDirectory.appendingPathComponent(decryptedFilename)
         
         // Check if file already exists and handle potential name conflicts if needed

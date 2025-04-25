@@ -208,6 +208,10 @@ class SafeRelayViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
+        print("--- DEBUG: Starting file send process ---")
+        print("File URL: \(fileURL.path)")
+        print("Security Level: \(securityLevel)")
+        
         // Disable file sending at standard security level
         if securityLevel == .standard {
             alertMessage = "File sending is only available at Enhanced or Maximum security levels."
@@ -219,64 +223,67 @@ class SafeRelayViewModel: ObservableObject {
         let shouldSplit = (securityLevel == .maximum) ? true : splitFiles
         let shouldEncrypt = (securityLevel == .maximum) ? true : encryptFiles
         
-        print("--- ViewModel: Preparing to send file \(fileURL.lastPathComponent). Split=\(shouldSplit), Encrypt=\(shouldEncrypt)")
+        print("--- DEBUG: File processing settings ---")
+        print("Should Split: \(shouldSplit)")
+        print("Should Encrypt: \(shouldEncrypt)")
         
         do {
             var messageContent = "File: \(fileURL.lastPathComponent)"
             var primaryURLString: String? = nil
             var secondaryURLString: String? = nil
-            var currentTransferID: String? = nil // Variable to hold the ID
+            var currentTransferID: String? = nil
             
             if shouldSplit {
                 if shouldEncrypt {
-                    // Split and Encrypt - Capture transferID
+                    print("--- DEBUG: Starting split and encrypt process ---")
                     let (primaryPartURL, secondaryPackageURL, transferID) = try await FileTransmissionService.shared.splitAndEncryptFile(from: fileURL)
                     primaryURLString = primaryPartURL.absoluteString
                     secondaryURLString = secondaryPackageURL.absoluteString
-                    currentTransferID = transferID // Store the ID
+                    currentTransferID = transferID
+                    
+                    print("--- DEBUG: File parts created ---")
+                    print("Primary URL: \(primaryURLString ?? "nil")")
+                    print("Secondary URL: \(secondaryURLString ?? "nil")")
+                    print("Transfer ID: \(transferID)")
+                    
                     messageContent += " (Split & Encrypted)"
-                    // Simulate "sending" primary part (e.g., confirm existence)
                     try await FileTransmissionService.shared.transmitPrimaryPart(url: primaryPartURL)
-                    // Prepare alert for user to handle secondary package
                     alertMessage = "File split and encrypted. Main part sent (simulated). Please share the secondary package separately."
                 } else {
-                    // Split only (Encryption logic might need refinement here if needed)
-                    // For simplicity, we assume splitting implies encryption for now
                     alertMessage = "Configuration error: Splitting without encryption is not fully supported yet."
                     showAlert = true
                     return
                 }
             } else if shouldEncrypt {
-                 // Encrypt only (Placeholder - needs implementation in FileTransmissionService)
-                 messageContent += " (Encrypted - TBD)"
-                 alertMessage = "Encrypting single file not implemented yet."
-                 showAlert = true
-                 return
+                messageContent += " (Encrypted - TBD)"
+                alertMessage = "Encrypting single file not implemented yet."
+                showAlert = true
+                return
             } else {
-                 // Send as is (Placeholder - needs implementation)
-                 messageContent += " (Plain - TBD)"
-                 alertMessage = "Sending plain file not implemented yet."
-                 showAlert = true
-                 return
+                messageContent += " (Plain - TBD)"
+                alertMessage = "Sending plain file not implemented yet."
+                showAlert = true
+                return
             }
             
-            // Create the message entry, passing the transferID and original filename
+            print("--- DEBUG: Creating message with file info ---")
             createAndSaveMessage(
                 content: messageContent,
                 tokenizedContent: nil,
                 tokens: [:],
                 primaryPartURLString: primaryURLString,
                 secondaryPackageURLString: secondaryURLString,
-                transferID: currentTransferID, // Pass the ID
-                originalFilename: fileURL.lastPathComponent // <-- Pass the original filename
+                transferID: currentTransferID,
+                originalFilename: fileURL.lastPathComponent
             )
             
-            // Show confirmation / instruction alert
-            alertType = nil // Just an informational alert
-            showAlert = true // Alert message set within the if/else block
+            print("--- DEBUG: Message created and saved ---")
+            alertType = nil
+            showAlert = true
 
         } catch {
-            print("--- ViewModel ERROR: Failed to process file: \(error.localizedDescription) ---")
+            print("--- DEBUG ERROR: File processing failed ---")
+            print("Error: \(error.localizedDescription)")
             alertMessage = "Error processing file: \(error.localizedDescription)"
             alertType = nil
             showAlert = true
@@ -316,6 +323,23 @@ class SafeRelayViewModel: ObservableObject {
         if saveToDevice { 
             messages = dbManager.fetchMessages()
             print("Loaded \(messages.count) messages from DB.")
+            
+            // Verify no duplicate IDs
+            let ids = messages.map { $0.id }
+            let uniqueIds = Set(ids)
+            if ids.count != uniqueIds.count {
+                print("--- DEBUG WARNING: Found duplicate message IDs ---")
+                // Remove duplicates by keeping only the first occurrence
+                var seenIds = Set<UUID>()
+                messages = messages.filter { message in
+                    if seenIds.contains(message.id) {
+                        return false
+                    }
+                    seenIds.insert(message.id)
+                    return true
+                }
+                print("Removed duplicates. Now have \(messages.count) messages.")
+            }
         } else {
              print("Loading messages skipped as saveToDevice is false.")
              messages = [] // Start with empty messages if not loading from DB
@@ -324,18 +348,67 @@ class SafeRelayViewModel: ObservableObject {
     
     // Add this new method
     func updateMessageAfterReconstruction(transferID: String, decryptedFileURL: URL) {
+        print("--- DEBUG: Starting message update after reconstruction ---")
+        print("Transfer ID: \(transferID)")
+        print("Decrypted File URL: \(decryptedFileURL.path)")
+        
         if let index = messages.firstIndex(where: { $0.transferID == transferID }) {
+            print("--- DEBUG: Found message to update at index \(index) ---")
+            print("Before update - Message state:")
+            print("Has decrypted URL: \(messages[index].decryptedFileURL != nil)")
+            print("Has primary URL: \(messages[index].primaryPartURLString != nil)")
+            print("Has secondary URL: \(messages[index].secondaryPackageURLString != nil)")
+            
             // Create a new message with updated properties
             var updatedMessage = messages[index]
             updatedMessage.decryptedFileURL = decryptedFileURL
+            
             // Update the message in the array
             messages[index] = updatedMessage
-            print("--- DEBUG: updatedMessage.decryptedFileURL = \(updatedMessage.decryptedFileURL?.path ?? "nil") ---")
-            // Update in database if needed
+            
+            print("--- DEBUG: Message updated with decrypted file URL ---")
+            print("After update - Message state:")
+            print("Has decrypted URL: \(messages[index].decryptedFileURL != nil)")
+            print("Has primary URL: \(messages[index].primaryPartURLString != nil)")
+            print("Has secondary URL: \(messages[index].secondaryPackageURLString != nil)")
+            
+            // Save to database if needed
             if saveToDevice {
+                // First remove any existing message with the same ID to avoid duplicates
+                dbManager.deleteMessage(withID: updatedMessage.id)
+                // Then save the updated message
                 dbManager.saveMessage(updatedMessage)
+                print("--- DEBUG: Updated message saved to database ---")
             }
-            print("--- ViewModel: Updated message with decrypted file URL for transferID: \(transferID)")
+            
+            // Force UI update
+            objectWillChange.send()
+            
+            // Notify that the message has been updated
+            NotificationCenter.default.post(
+                name: NSNotification.Name("MessageUpdated"),
+                object: nil,
+                userInfo: ["transferID": transferID]
+            )
+            
+            // Verify the URL is still accessible
+            if let savedURL = messages[index].decryptedFileURL {
+                print("--- DEBUG: Verifying saved URL ---")
+                print("Saved URL path: \(savedURL.path)")
+                print("File exists: \(FileManager.default.fileExists(atPath: savedURL.path))")
+            } else {
+                print("--- DEBUG ERROR: URL not saved properly ---")
+            }
+            
+            // Reload messages to ensure we have the latest state
+            loadMessages()
+            
+            // Force another UI update after reloading
+            DispatchQueue.main.async {
+                self.objectWillChange.send()
+            }
+        } else {
+            print("--- DEBUG ERROR: No message found for transfer ID \(transferID) ---")
         }
     }
 }
