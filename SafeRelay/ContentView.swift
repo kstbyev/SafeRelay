@@ -7,8 +7,6 @@
 
 import SwiftUI
 import CoreData
-import UniformTypeIdentifiers
-import QuickLook
 
 // Define the wrapper struct
 struct ShareableURL: Identifiable {
@@ -261,85 +259,80 @@ struct ContentView: View {
     
     // Helper function to process the incoming URL
     private func handleIncomingURL(_ url: URL) {
-        print("--- DEBUG: Handling incoming URL ---")
-        print("URL: \(url.path)")
-        
         // Check if it's a file URL and has the expected extension
         guard url.isFileURL, url.pathExtension == "safeRelayPkg" else {
-            print("--- DEBUG ERROR: Invalid file type ---")
-            print("Is File URL: \(url.isFileURL)")
-            print("Extension: \(url.pathExtension)")
+            print("--- ContentView: Incoming URL is not a valid .safeRelayPkg file.")
+            // Optionally show an error to the user
             return
         }
         
-        // Extract transferID from filename
+        // Extract transferID from filename (assuming format secondary_TRANSFERID_original.safeRelayPkg)
         let filename = url.lastPathComponent
         let parts = filename.split(separator: "_")
         guard parts.count >= 3, parts[0] == "secondary" else {
-            print("--- DEBUG ERROR: Invalid filename format ---")
-            print("Filename: \(filename)")
-            print("Parts: \(parts)")
+            print("--- ContentView: Could not extract transferID from filename: \(filename)")
             return
         }
         let transferID = String(parts[1])
-        print("--- DEBUG: Extracted transfer ID: \(transferID)")
+        print("--- ContentView: Extracted transferID: \(transferID)")
 
-        // Check if already processing
+        // --- Check if already processing this ID ---
         if viewModel.processingTransferIDs.contains(transferID) {
-            print("--- DEBUG: Already processing this transfer ID ---")
+            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request. ---")
             return
         }
+        // ---------------------------------------------
 
-        // Find the corresponding message
+        // Find the corresponding message in ViewModel
         guard let targetMessageIndex = viewModel.messages.firstIndex(where: { $0.transferID == transferID }) else {
-            print("--- DEBUG ERROR: No message found for transfer ID ---")
-            viewModel.alertMessage = "Original message not found for this file part."
-            viewModel.alertType = nil
-            viewModel.showAlert = true
-            return
+             print("--- ContentView: No message found for transferID: \(transferID)")
+             // Show error: "Original message not found for this file part."
+             viewModel.alertMessage = "Original message not found for this file part."
+             viewModel.alertType = nil
+             viewModel.showAlert = true
+             return
         }
         let targetMessage = viewModel.messages[targetMessageIndex]
-        print("--- DEBUG: Found target message at index \(targetMessageIndex)")
         
-        // Check if already reconstructed
+        // --- Check if already reconstructed ---
         if let decryptedURL = targetMessage.decryptedFileURL {
-            print("--- DEBUG: File already reconstructed ---")
-            print("Decrypted URL: \(decryptedURL.path)")
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping. ---")
+            // Show alert and offer to open the existing file
             viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
             viewModel.alertType = .fileAlreadyProcessed
             viewModel.showAlert = true
             return
         }
+        // -------------------------------------
         
         // Ensure primary part URL exists
         guard let primaryURLString = targetMessage.primaryPartURLString, 
               let primaryURL = URL(string: primaryURLString) else {
-            print("--- DEBUG ERROR: Invalid primary URL ---")
-            print("Primary URL String: \(targetMessage.primaryPartURLString ?? "nil")")
+            print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
             viewModel.alertMessage = "Primary file part information is missing or invalid."
             viewModel.alertType = nil
             viewModel.showAlert = true
             return
         }
         
-        print("--- DEBUG: Starting file reconstruction ---")
-        print("Primary URL: \(primaryURL.path)")
-        viewModel.isLoading = true
-        viewModel.processingTransferIDs.insert(transferID)
+        print("--- ContentView: Found matching message and primary URL. Starting reconstruction for \(transferID).")
+        viewModel.isLoading = true // Show loading indicator
+        viewModel.processingTransferIDs.insert(transferID) // Mark as processing BEFORE starting Task
         
         Task {
             defer {
+                // Ensure ID is removed from processing set when Task completes (success or error)
                 Task { @MainActor in
                     viewModel.processingTransferIDs.remove(transferID)
                     viewModel.isLoading = false
-                    print("--- DEBUG: Removed transfer ID from processing set ---")
+                    print("--- ContentView: Removed transferID \(transferID) from processing set. ---")
                 }
             }
             
             do {
                 // Read the secondary package data
                 guard url.startAccessingSecurityScopedResource() else {
-                    print("--- DEBUG ERROR: Cannot access security scoped resource ---")
+                    print("--- ContentView ERROR: Cannot access security scoped resource for URL: \(url.path)")
                     throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
                 }
                 defer {
@@ -349,57 +342,43 @@ struct ContentView: View {
                 let secondaryPackageData: Data
                 do {
                     secondaryPackageData = try Data(contentsOf: url)
-                    print("--- DEBUG: Read secondary package data: \(secondaryPackageData.count) bytes ---")
                 } catch {
-                    print("--- DEBUG ERROR: Failed to read secondary package ---")
-                    print("Error: \(error.localizedDescription)")
+                    print("--- ContentView ERROR: Failed to read secondary package data: \(error.localizedDescription)")
                     throw FileTransmissionService.FileError.readError(error.localizedDescription)
                 }
                 
                 // Call the reconstruction service
-                print("--- DEBUG: Calling reconstruction service ---")
                 let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
                     primaryPartURL: primaryURL,
                     secondaryPackageData: secondaryPackageData
                 )
                 
-                print("--- DEBUG: File reconstruction successful ---")
-                print("Decrypted file URL: \(decryptedFileURL.path)")
-                
-                // Perform delay before UI updates
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                // Success!
+                // Perform delay *before* switching to main actor for UI updates
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 
                 await MainActor.run {
+                    print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
+                    
+                    // Update message with decrypted file URL
                     viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
+                    
+                    // Show a standard alert that the user dismisses
                     viewModel.alertMessage = "File successfully reconstructed!"
                     viewModel.alertType = nil
                     viewModel.showAlert = true
+                    
+                    print("--- ContentView: Message updated with decrypted file URL (after delay) ---")
                 }
             } catch {
-                print("--- DEBUG ERROR: File reconstruction failed ---")
-                print("Error: \(error.localizedDescription)")
                 await MainActor.run {
+                    print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
                     viewModel.alertMessage = "Error processing file: \(error.localizedDescription)"
                     viewModel.alertType = nil
                     viewModel.showAlert = true
                 }
             }
         }
-    }
-    
-    // Add support for opening files from Files app
-    private func openFileFromFiles(_ url: URL) {
-        print("--- DEBUG: Opening file from Files app ---")
-        print("File URL: \(url.path)")
-        
-        // Check if it's a .safeRelayPkg file
-        guard url.pathExtension == "safeRelayPkg" else {
-            print("--- DEBUG ERROR: Not a .safeRelayPkg file ---")
-            return
-        }
-        
-        // Handle the file
-        handleIncomingURL(url)
     }
 }
 
@@ -449,9 +428,6 @@ struct MessageBubble: View {
     @State private var hoveredToken: String?
     @Binding var shareablePackage: ShareableURL?
     @Binding var fileContentPreview: String?
-    @State private var isReconstructed = false
-    @State private var showingFilePreview = false
-    @State private var decryptedURL: URL?
     
     private func getTokenColor(_ token: String) -> Color {
         if token.starts(with: "EMAIL_") { return .blue }
@@ -484,6 +460,8 @@ struct MessageBubble: View {
                 let tokenColor = getTokenColor(wordStr)
                 tokenAttr.foregroundColor = tokenColor
                 tokenAttr.backgroundColor = tokenColor.opacity(0.15)
+                // Apply inline block styling might help but can be complex, start simple
+                // tokenAttr.inlinePresentationIntent = .block
                 currentWordAttr = tokenAttr
             }
 
@@ -495,54 +473,6 @@ struct MessageBubble: View {
             }
         }
         return attributedString
-    }
-    
-    // Helper to check if file is text-based
-    private func isTextFile(_ url: URL) -> Bool {
-        let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
-        let fileExtension = url.pathExtension.lowercased()
-        
-        // If no extension, try to read as text
-        if fileExtension.isEmpty {
-            do {
-                let content = try String(contentsOf: url, encoding: .utf8)
-                return !content.isEmpty
-            } catch {
-                print("--- DEBUG: Failed to read as text: \(error.localizedDescription)")
-                return false
-            }
-        }
-        
-        return textExtensions.contains(fileExtension)
-    }
-    
-    // Helper to check if file is an image
-    private func isImageFile(_ url: URL) -> Bool {
-        let imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"]
-        return imageExtensions.contains(url.pathExtension.lowercased())
-    }
-    
-    // Helper to check if file is a PDF
-    private func isPDFFile(_ url: URL) -> Bool {
-        // Check extension
-        if url.pathExtension.lowercased() == "pdf" {
-            return true
-        }
-        
-        // If no extension, try to read first few bytes to check PDF signature
-        do {
-            let data = try Data(contentsOf: url)
-            if data.count >= 5 {
-                let signature = data.prefix(5)
-                let isPDF = signature == "%PDF-".data(using: .ascii)
-                print("--- DEBUG: PDF signature check: \(isPDF ? "Found" : "Not found")")
-                return isPDF
-            }
-        } catch {
-            print("--- DEBUG ERROR: Failed to read file for PDF detection: \(error.localizedDescription)")
-        }
-        
-        return false
     }
 
     var body: some View {
@@ -565,12 +495,13 @@ struct MessageBubble: View {
                                 .cornerRadius(12)
                                 .textSelection(.enabled)
                         } else {
+                            // Use Text with the generated AttributedString
                             Text(createAttributedString(from: tokenized))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(Color.blue.opacity(0.1))
                                 .cornerRadius(12)
-                                .textSelection(.enabled)
+                                .textSelection(.enabled) // Enable selection on the AttributedString
                         }
                     } else {
                         Text(message.content)
@@ -600,67 +531,26 @@ struct MessageBubble: View {
                 
                 // Check if it's a file message with split parts
                 if message.primaryPartURLString != nil {
-                    if isReconstructed || decryptedURL != nil {
+                    if let decryptedURL = message.decryptedFileURL {
                         // File has been reconstructed - show Open button or preview
                         Button {
-                            print("--- DEBUG: Open File button tapped ---")
-                            if let url = decryptedURL {
-                                print("File URL: \(url.path)")
-                                print("File extension: \(url.pathExtension)")
-                                print("File exists: \(FileManager.default.fileExists(atPath: url.path))")
-                                print("File size: \(try? FileManager.default.attributesOfItem(atPath: url.path)[.size] ?? 0) bytes")
-                                
-                                if isPDFFile(url) {
-                                    print("--- DEBUG: Detected PDF file ---")
-                                    // For PDFs, show in QLPreviewController
-                                    print("--- DEBUG: Showing PDF in preview controller ---")
-                                    let previewController = PDFPreviewController(url: url)
-                                    let hostingController = UIHostingController(rootView: previewController)
-                                    UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
-                                    print("--- DEBUG: Successfully showed PDF preview ---")
-                                } else if isTextFile(url) {
-                                    print("--- DEBUG: Detected text file ---")
-                                    // For text files, show preview in message
-                                    do {
-                                        let content = try String(contentsOf: url, encoding: .utf8)
-                                        print("--- DEBUG: Successfully read text content ---")
-                                        print("Content length: \(content.count) characters")
-                                        fileContentPreview = content
-                                        showingFilePreview = true
-                                        print("--- DEBUG: Set file preview to show ---")
-                                    } catch {
-                                        print("--- DEBUG ERROR: Failed to read text file ---")
-                                        print("Error: \(error.localizedDescription)")
-                                        if UIApplication.shared.canOpenURL(url) {
-                                            UIApplication.shared.open(url)
-                                            print("--- DEBUG: Successfully opened file externally ---")
-                                        } else {
-                                            print("--- DEBUG ERROR: Cannot open file externally ---")
-                                        }
-                                    }
-                                } else if isImageFile(url) {
-                                    print("--- DEBUG: Detected image file ---")
-                                    // For images, show preview in message
-                                    fileContentPreview = "Image file: \(url.lastPathComponent)"
-                                    showingFilePreview = true
-                                    print("--- DEBUG: Set image preview to show ---")
+                            print("--- DEBUG: Attempting to preview/open decrypted file: \(decryptedURL.path)")
+                            // Try to read as text first
+                            do {
+                                // Check if it looks like a text file (simple check)
+                                if decryptedURL.pathExtension.lowercased() == "txt" || decryptedURL.pathExtension.lowercased() == "log" || decryptedURL.pathExtension.isEmpty { // Add other text extensions if needed
+                                    let content = try String(contentsOf: decryptedURL, encoding: .utf8)
+                                    fileContentPreview = content
+                                    print("--- DEBUG: Loaded text content for preview.")
                                 } else {
-                                    print("--- DEBUG: Detected other file type ---")
-                                    // For other files, open in external viewer
-                                    print("--- DEBUG: Opening file externally ---")
-                                    if UIApplication.shared.canOpenURL(url) {
-                                        UIApplication.shared.open(url)
-                                        print("--- DEBUG: Successfully opened file externally ---")
-                                    } else {
-                                        print("--- DEBUG ERROR: Cannot open file externally ---")
-                                    }
+                                    // Not a recognized text file, open externally
+                                    print("--- DEBUG: Not a text file, opening externally.")
+                                    UIApplication.shared.open(decryptedURL)
                                 }
-                            } else {
-                                print("--- DEBUG ERROR: No decrypted URL found ---")
-                                print("Message state:")
-                                print("Has decrypted URL: \(message.decryptedFileURL != nil)")
-                                print("Has primary URL: \(message.primaryPartURLString != nil)")
-                                print("Has secondary URL: \(message.secondaryPackageURLString != nil)")
+                            } catch {
+                                // Error reading or not text, open externally
+                                print("--- DEBUG: Error reading file as text or not text file, opening externally: \(error.localizedDescription)")
+                                UIApplication.shared.open(decryptedURL)
                             }
                         } label: {
                             HStack(spacing: 2) {
@@ -705,16 +595,15 @@ struct MessageBubble: View {
             }
             .padding(.horizontal, 8)
             
-            // --- File Preview Area ---
-            if showingFilePreview, let preview = fileContentPreview {
+            // --- ADDED: Text File Preview Area ---
+            if let preview = fileContentPreview {
                 VStack(alignment: .leading) {
                     HStack {
                         Text("File Preview:")
                             .font(.caption.bold())
                         Spacer()
                         Button {
-                            fileContentPreview = nil
-                            showingFilePreview = false
+                            fileContentPreview = nil // Close preview
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.gray)
@@ -737,24 +626,6 @@ struct MessageBubble: View {
         }
         .sheet(isPresented: $showingDetails) {
             MessageDetailsView(message: message)
-        }
-        .onChange(of: message.decryptedFileURL) { oldValue, newValue in
-            print("--- DEBUG: Message decryptedFileURL changed ---")
-            print("Old value: \(oldValue?.path ?? "nil")")
-            print("New value: \(newValue?.path ?? "nil")")
-            isReconstructed = newValue != nil
-            decryptedURL = newValue
-        }
-        .onAppear {
-            isReconstructed = message.decryptedFileURL != nil
-            decryptedURL = message.decryptedFileURL
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MessageUpdated"))) { notification in
-            if let transferID = notification.userInfo?["transferID"] as? String,
-               transferID == message.transferID {
-                isReconstructed = true
-                decryptedURL = message.decryptedFileURL
-            }
         }
     }
 }
@@ -900,38 +771,6 @@ struct ActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
-struct PDFPreviewController: UIViewControllerRepresentable {
-    let url: URL
-    
-    func makeUIViewController(context: Context) -> QLPreviewController {
-        let controller = QLPreviewController()
-        controller.dataSource = context.coordinator
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(url: url)
-    }
-    
-    class Coordinator: NSObject, QLPreviewControllerDataSource {
-        let url: URL
-        
-        init(url: URL) {
-            self.url = url
-        }
-        
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
-            return 1
-        }
-        
-        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-            return url as QLPreviewItem
-        }
-    }
 }
 
 #Preview {

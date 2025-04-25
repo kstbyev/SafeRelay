@@ -7,10 +7,8 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>SafeRelay Package</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
 			<key>LSHandlerRank</key>
-			<string>Owner</string>
+			<string>Default</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.madi.saferelay.pkg</string>
@@ -30,7 +28,7 @@
 				<string>public.content</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>SafeRelay Package</string>
+			<string>SafeRelay Secondary Package</string>
 			<key>UTTypeIconFiles</key>
 			<array/>
 			<key>UTTypeIdentifier</key>

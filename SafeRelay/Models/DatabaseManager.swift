@@ -45,21 +45,6 @@ class DatabaseManager {
         }
     }
     
-    // Deletes a message with the specified ID
-    func deleteMessage(withID id: UUID) {
-        var currentMessages = fetchMessagesInternal()
-        currentMessages.removeAll { $0.id == id }
-        
-        // Save the updated array
-        do {
-            let encodedData = try JSONEncoder().encode(currentMessages)
-            defaults.set(encodedData, forKey: messagesKey)
-            print("--- DB DEBUG: Deleted message with ID \(id) and saved \(currentMessages.count) remaining messages.")
-        } catch {
-            print("--- DB ERROR: Failed to encode messages after deletion: \(error.localizedDescription)")
-        }
-    }
-    
     // Optional: Function to clear all messages (e.g., for testing or privacy)
     func clearAllMessages() {
         defaults.removeObject(forKey: messagesKey)
