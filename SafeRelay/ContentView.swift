@@ -402,6 +402,16 @@ struct SecurityStatusBar: View {
                 Label("Encrypted", systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundColor(.green)
+                    .padding(6)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(4)
+            } else {
+                Label("Unencrypted", systemImage: "lock.open.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(6)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
             }
         }
         .padding(.horizontal)
