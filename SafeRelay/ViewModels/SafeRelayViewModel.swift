@@ -234,6 +234,9 @@ class SafeRelayViewModel: ObservableObject {
                     primaryURLString = primaryPartURL.absoluteString
                     secondaryURLString = secondaryPackageURL.absoluteString
                     currentTransferID = transferID // Store the ID
+                    print("--- DEBUG: Set primaryURLString = \(primaryURLString ?? "nil")")
+                    print("--- DEBUG: Set secondaryURLString = \(secondaryURLString ?? "nil")")
+                    print("--- DEBUG: Set currentTransferID = \(currentTransferID ?? "nil")")
                     messageContent += " (Split & Encrypted)"
                     // Simulate "sending" primary part (e.g., confirm existence)
                     try await FileTransmissionService.shared.transmitPrimaryPart(url: primaryPartURL)

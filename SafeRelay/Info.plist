@@ -7,11 +7,13 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>SafeRelay Package</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
 			<key>LSHandlerRank</key>
-			<string>Default</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.madi.saferelay.pkg</string>
+				<string>com.sharipov.saferelay.pkg</string>
 			</array>
 		</dict>
 	</array>
@@ -28,16 +30,20 @@
 				<string>public.content</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>SafeRelay Secondary Package</string>
+			<string>SafeRelay Package</string>
 			<key>UTTypeIconFiles</key>
 			<array/>
 			<key>UTTypeIdentifier</key>
-			<string>com.madi.saferelay.pkg</string>
+			<string>com.sharipov.saferelay.pkg</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
 					<string>safeRelayPkg</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/x-saferelay-pkg</string>
 				</array>
 			</dict>
 		</dict>

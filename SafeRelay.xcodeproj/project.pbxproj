@@ -24,6 +24,9 @@
 		04E7BEFD2DBA3D1D008E5753 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */; };
 		04E7BF012DBB177E008E5753 /* CryptoTokenKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */; };
 		04E7BF022DBB177E008E5753 /* CryptoKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E7BF002DBB177E008E5753 /* CryptoKit.framework */; };
+		04E7BF052DBD1BF5008E5753 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF042DBD1BF4008E5753 /* MessageView.swift */; };
+		04E7BF072DBD1C0C008E5753 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF062DBD1C0C008E5753 /* Theme.swift */; };
+		04E7BF092DBE4013008E5753 /* CustomNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF082DBE4013008E5753 /* CustomNavBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +50,9 @@
 		04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoTokenKit.framework; path = System/Library/Frameworks/CryptoTokenKit.framework; sourceTree = SDKROOT; };
 		04E7BF002DBB177E008E5753 /* CryptoKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CryptoKit.framework; path = System/Library/Frameworks/CryptoKit.framework; sourceTree = SDKROOT; };
+		04E7BF042DBD1BF4008E5753 /* MessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
+		04E7BF062DBD1C0C008E5753 /* Theme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		04E7BF082DBE4013008E5753 /* CustomNavBar.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CustomNavBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,11 +89,14 @@
 		0413A1772DB6A50500856811 /* SafeRelay */ = {
 			isa = PBXGroup;
 			children = (
+				04E7BF032DBD1BF4008E5753 /* Components */,
 				04D623E02DB7701900000853 /* ViewModels */,
 				04D623D72DB76FF800000853 /* Services */,
 				0413A1912DB6A89400856811 /* Models */,
 				0413A1782DB6A50500856811 /* SafeRelayApp.swift */,
 				0413A17A2DB6A50500856811 /* ContentView.swift */,
+				04E7BF082DBE4013008E5753 /* CustomNavBar.swift */,
+				04E7BF062DBD1C0C008E5753 /* Theme.swift */,
 				0413A17C2DB6A50700856811 /* Assets.xcassets */,
 				0413A1812DB6A50700856811 /* Persistence.swift */,
 				0413A1862DB6A50700856811 /* SafeRelay.entitlements */,
@@ -142,6 +151,14 @@
 				04E7BEFF2DBB177E008E5753 /* CryptoTokenKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		04E7BF032DBD1BF4008E5753 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				04E7BF042DBD1BF4008E5753 /* MessageView.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -220,13 +237,16 @@
 				04E7BEFB2DB913D1008E5753 /* SensitiveData.swift in Sources */,
 				0413A17B2DB6A50500856811 /* ContentView.swift in Sources */,
 				04D623E22DB7701900000853 /* SafeRelayViewModel.swift in Sources */,
+				04E7BF052DBD1BF5008E5753 /* MessageView.swift in Sources */,
 				04D623DD2DB76FF800000853 /* FileTransmissionService.swift in Sources */,
 				04D623DE2DB76FF800000853 /* KeychainService.swift in Sources */,
 				0413A1852DB6A50700856811 /* SafeRelay.xcdatamodeld in Sources */,
+				04E7BF092DBE4013008E5753 /* CustomNavBar.swift in Sources */,
 				04E7BEFD2DBA3D1D008E5753 /* DatabaseManager.swift in Sources */,
 				04D623DC2DB76FF800000853 /* PhishingProtectionService.swift in Sources */,
 				0413A1792DB6A50500856811 /* SafeRelayApp.swift in Sources */,
 				0413A1932DB6A89400856811 /* SecureMessage.swift in Sources */,
+				04E7BF072DBD1C0C008E5753 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

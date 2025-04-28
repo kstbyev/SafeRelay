@@ -26,249 +26,193 @@ struct ContentView: View {
     @State private var tokens = [:]
     @State private var shareablePackage: ShareableURL?
     @State private var fileContentPreview: String?
+    @State private var selectedTab: Int = 0
     
+    let tabItems: [(icon: String, label: String)] = [
+        ("bubble.left.and.bubble.right.fill", "Chats"),
+        ("doc.on.doc", "Files"),
+        ("gearshape", "Setti"),
+        ("person.crop.circle", "Pfofile")
+    ]
+
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Security Status Bar
-                SecurityStatusBar(viewModel: viewModel)
-                
-                // Messages List
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(viewModel.messages) { message in
-                                MessageBubble(
-                                    message: message, 
-                                    viewModel: viewModel,
-                                    shareablePackage: $shareablePackage,
-                                    fileContentPreview: $fileContentPreview
-                                )
-                                    .id(message.id)
-                            }
-                        }
-                        .padding()
-                    }
-                    .onChange(of: viewModel.messages.count) { oldCount, newCount in
-                        if let lastMessage = viewModel.messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                }
-                
-                // Composition Area
-                VStack(spacing: 8) {
-                    if isComposing {
-                        HStack {
-                            Text("Security Level:")
-                                .font(.caption)
-                            Picker("Security Level", selection: $viewModel.securityLevel) {
-                                ForEach(SecurityLevel.allCases) { level in
-                                    Text(level.description).tag(level)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .padding(.horizontal)
-                    }
-                    
-                    HStack {
-                        TextField("Type a message...", text: $messageText)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .onChange(of: messageText) { oldValue, newValue in
-                                print("--- DEBUG: TextField changed ---")
-                                print("Old value: [\(oldValue)]")
-                                print("New value: [\(newValue)]")
-                            }
-                            .onTapGesture {
-                                isComposing = true
-                            }
-                        
-                        Button(action: {
-                            print("--- DEBUG: Send button pressed ---")
-                            let currentText = messageText // Capture current text
-                            print("Message to send: [\(currentText)]")
-                            if currentText.isEmpty {
-                                print("--- DEBUG: Send button pressed with empty text, doing nothing ---")
-                                return
-                            }
-                            Task {
-                                print("--- DEBUG: Calling viewModel.sendMessage ---")
-                                let sentDirectly = await viewModel.sendMessage(currentText)
-                                print("--- DEBUG: viewModel.sendMessage returned: \(sentDirectly) ---")
-                                // Clear text only if message was sent directly (no alert shown)
-                                if sentDirectly {
-                                    print("--- DEBUG: Clearing messageText as message was sent directly ---")
-                                    messageText = ""
-                                    isComposing = false
-                                }
-                            }
-                        }) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(messageText.isEmpty ? .gray : .blue)
-                        }
-                        .disabled(messageText.isEmpty || viewModel.isLoading)
-                    }
-                    .padding(.horizontal)
-                    
-                    if isComposing {
-                        HStack(spacing: 12) {
-                            if viewModel.securityLevel != .standard {
-                                Button(action: { showingFilePicker = true }) {
-                                    Label("File", systemImage: "paperclip")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                            
-                            Button(action: {
-                                viewModel.toggleEncryption()
-                            }) {
-                                Label(
-                                    viewModel.isEncryptionEnabled ? "Encryption On" : "Encryption Off",
-                                    systemImage: viewModel.isEncryptionEnabled ? "lock.fill" : "lock.open"
-                                )
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(viewModel.securityLevel == .maximum)
-                            
+        VStack(spacing: 0) {
+            Group {
+                switch selectedTab {
+                case 0:
+                    ChatTabView(
+                        viewModel: viewModel,
+                        messageText: $messageText,
+                        showingFilePicker: $showingFilePicker,
+                        showingSecuritySettings: $showingSecuritySettings,
+                        isComposing: $isComposing,
+                        shareablePackage: $shareablePackage,
+                        fileContentPreview: $fileContentPreview,
+                        onProfile: { selectedTab = 3 },
+                        onSettings: { selectedTab = 2 }
+                    )
+                    .frame(maxHeight: .infinity)
+                case 1:
+                    NavigationView {
+                        VStack {
+                            CustomNavBar(title: "Files")
                             Spacer()
-                            
-                            if viewModel.isLoading {
-                                ProgressView()
-                            }
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 60))
+                                .foregroundColor(Theme.accent)
+                                .padding()
+                            Text("Here wiil be your files")
+                                .font(Theme.bodyFont)
+                                .foregroundColor(Theme.secondaryText)
+                            Spacer()
                         }
-                        .id(viewModel.securityLevel)
-                        .padding(.horizontal)
+                        .background(Theme.background)
+                        .navigationBarHidden(true)
                     }
-                }
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground))
-                .shadow(radius: 2)
-            }
-            .navigationTitle("SafeRelay+")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingSecuritySettings = true }) {
-                        Image(systemName: "shield.lefthalf.filled")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingSecuritySettings) {
-                SecuritySettingsView(viewModel: viewModel)
-            }
-            .sheet(item: $shareablePackage) { item in
-                if FileManager.default.fileExists(atPath: item.url.path) {
-                    ActivityView(activityItems: [item.url])
-                } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.largeTitle)
-                        Text("Error Sharing File") .font(.headline)
-                        Text("Could not find the file part to share. It might have been deleted.")
-                            .font(.footnote)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        Button("Dismiss") { shareablePackage = nil } 
-                            .padding(.top)
-                    }
-                    .onAppear {
-                        print("--- ERROR: File for share sheet NOT FOUND at path: \(item.url.path). Showing error view.")
-                    }
-                }
-            }
-            .alert(viewModel.alertMessage ?? "", isPresented: $viewModel.showAlert) {
-                switch viewModel.alertType {
-                case .sensitiveData:
-                    Button("Tokenize and Send") {
-                        print("--- DEBUG: Tokenize Button Pressed ---")
-                        print("Current messageText: [\(messageText)]")
-                        let textToSend = messageText
-                        Task {
-                            print("--- DEBUG: Before tokenizeAndSendMessage ---")
-                            print("Text to send: [\(textToSend)]")
-                            await viewModel.tokenizeAndSendMessage(textToSend)
-                            print("--- DEBUG: After tokenizeAndSendMessage ---")
-                            messageText = ""
-                            isComposing = false
+                case 2:
+                    NavigationView {
+                        VStack {
+                            CustomNavBar(title: "Настройки")
+                            Spacer()
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 60))
+                                .foregroundColor(Theme.accent)
+                                .padding()
+                            Text("Настройки приложения")
+                                .font(Theme.bodyFont)
+                                .foregroundColor(Theme.secondaryText)
+                            Spacer()
                         }
+                        .background(Theme.background)
+                        .navigationBarHidden(true)
                     }
-                    Button("Send Anyway", role: .destructive) {
-                        Task {
-                            await viewModel.sendMessage(messageText)
-                            messageText = ""
-                            isComposing = false
+                case 3:
+                    NavigationView {
+                        VStack {
+                            CustomNavBar(title: "Профиль")
+                            Spacer()
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 60))
+                                .foregroundColor(Theme.accent)
+                                .padding()
+                            Text("Ваш профиль")
+                                .font(Theme.bodyFont)
+                                .foregroundColor(Theme.secondaryText)
+                            Spacer()
                         }
+                        .background(Theme.background)
+                        .navigationBarHidden(true)
                     }
-                    Button("Cancel", role: .cancel) {}
-                    
-                case .phishing:
-                    Button("Send Anyway", role: .destructive) {
-                        Task {
-                            await viewModel.sendMessage(messageText)
-                            messageText = ""
-                            isComposing = false
-                        }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                    
-                case .fileAlreadyProcessed:
-                    Button("Open File") {
-                        if let decryptedURL = viewModel.messages.first(where: { $0.transferID == viewModel.processingTransferIDs.first })?.decryptedFileURL {
-                            UIApplication.shared.open(decryptedURL)
-                        }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                    
-                case .none:
-                    Button("OK", role: .cancel) {}
+                default:
+                    EmptyView()
                 }
             }
-            .fileImporter(
-                isPresented: $showingFilePicker,
-                allowedContentTypes: [.data],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    if let url = urls.first {
-                        Task {
-                            await viewModel.sendFile(url)
-                        }
-                    }
-                case .failure(let error):
-                    viewModel.alertMessage = "Error selecting file: \(error.localizedDescription)"
-                    viewModel.showAlert = true
+            CustomTabBar(selectedTab: $selectedTab, tabItems: tabItems)
+        }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+    
+    private func handleSendMessage() {
+        let currentText = messageText
+        if currentText.isEmpty { return }
+        
+        Task {
+            let sentDirectly = await viewModel.sendMessage(currentText)
+            if sentDirectly {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    messageText = ""
+                    isComposing = false
                 }
-            }
-            .onChange(of: messageText) { oldValue, newValue in
-                if !newValue.isEmpty {
-                    let result = DataProtectionService.shared.tokenizeSensitiveData(newValue)
-                    tokenizedText = result.tokenizedText
-                    tokens = result.tokens
-                } else {
-                    tokenizedText = ""
-                    tokens = [:]
-                }
-            }
-            .onOpenURL { incomingURL in
-                print("--- ContentView: Received URL via onOpenURL: \(incomingURL)")
-                handleIncomingURL(incomingURL)
             }
         }
     }
     
-    // Helper function to process the incoming URL
+    private func handleAlertAction() -> some View {
+        Group {
+            switch viewModel.alertType {
+            case .sensitiveData:
+                Button("Tokenize and Send") {
+                    let textToSend = messageText
+                    Task {
+                        await viewModel.tokenizeAndSendMessage(textToSend)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            messageText = ""
+                            isComposing = false
+                        }
+                    }
+                }
+                Button("Send Anyway", role: .destructive) {
+                    Task {
+                        await viewModel.sendMessage(messageText)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            messageText = ""
+                            isComposing = false
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+                
+            case .phishing:
+                Button("Send Anyway", role: .destructive) {
+                    Task {
+                        await viewModel.sendMessage(messageText)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            messageText = ""
+                            isComposing = false
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+                
+            case .fileAlreadyProcessed:
+                Button("Open File") {
+                    if let decryptedURL = viewModel.messages.first(where: { $0.transferID == viewModel.processingTransferIDs.first })?.decryptedFileURL {
+                        UIApplication.shared.open(decryptedURL)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+                
+            case .none:
+                Button("OK", role: .cancel) {}
+            }
+        }
+    }
+    
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                Task {
+                    await viewModel.sendFile(url)
+                }
+            }
+        case .failure(let error):
+            viewModel.alertMessage = "Error selecting file: \(error.localizedDescription)"
+            viewModel.showAlert = true
+        }
+    }
+    
+    private func handleMessageTextChange(_ newValue: String) {
+        if !newValue.isEmpty {
+            let result = DataProtectionService.shared.tokenizeSensitiveData(newValue)
+            tokenizedText = result.tokenizedText
+            tokens = result.tokens
+        } else {
+            tokenizedText = ""
+            tokens = [:]
+        }
+    }
+    
     private func handleIncomingURL(_ url: URL) {
+        print("--- ContentView: Received URL via onOpenURL: \(url)")
+        
         // Check if it's a file URL and has the expected extension
         guard url.isFileURL, url.pathExtension == "safeRelayPkg" else {
             print("--- ContentView: Incoming URL is not a valid .safeRelayPkg file.")
-            // Optionally show an error to the user
             return
         }
         
-        // Extract transferID from filename (assuming format secondary_TRANSFERID_original.safeRelayPkg)
+        // Extract transferID from filename
         let filename = url.lastPathComponent
         let parts = filename.split(separator: "_")
         guard parts.count >= 3, parts[0] == "secondary" else {
@@ -276,39 +220,35 @@ struct ContentView: View {
             return
         }
         let transferID = String(parts[1])
-        print("--- ContentView: Extracted transferID: \(transferID)")
-
-        // --- Check if already processing this ID ---
+        
+        // Check if already processing
         if viewModel.processingTransferIDs.contains(transferID) {
-            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request. ---")
+            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request.")
             return
         }
-        // ---------------------------------------------
-
-        // Find the corresponding message in ViewModel
+        
+        // Find the corresponding message
         guard let targetMessageIndex = viewModel.messages.firstIndex(where: { $0.transferID == transferID }) else {
-             print("--- ContentView: No message found for transferID: \(transferID)")
-             // Show error: "Original message not found for this file part."
-             viewModel.alertMessage = "Original message not found for this file part."
-             viewModel.alertType = nil
-             viewModel.showAlert = true
-             return
+            print("--- ContentView: No message found for transferID: \(transferID)")
+            viewModel.alertMessage = "Original message not found for this file part."
+            viewModel.alertType = nil
+            viewModel.showAlert = true
+            return
         }
+        
         let targetMessage = viewModel.messages[targetMessageIndex]
         
-        // --- Check if already reconstructed ---
+        // Check if already reconstructed
         if let decryptedURL = targetMessage.decryptedFileURL {
-            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping. ---")
-            // Show alert and offer to open the existing file
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping.")
             viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
             viewModel.alertType = .fileAlreadyProcessed
             viewModel.showAlert = true
             return
         }
-        // -------------------------------------
         
         // Ensure primary part URL exists
-        guard let primaryURLString = targetMessage.primaryPartURLString, 
+        guard let primaryURLString = targetMessage.primaryPartURLString,
               let primaryURL = URL(string: primaryURLString) else {
             print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
             viewModel.alertMessage = "Primary file part information is missing or invalid."
@@ -318,16 +258,15 @@ struct ContentView: View {
         }
         
         print("--- ContentView: Found matching message and primary URL. Starting reconstruction for \(transferID).")
-        viewModel.isLoading = true // Show loading indicator
-        viewModel.processingTransferIDs.insert(transferID) // Mark as processing BEFORE starting Task
+        viewModel.isLoading = true
+        viewModel.processingTransferIDs.insert(transferID)
         
         Task {
             defer {
-                // Ensure ID is removed from processing set when Task completes (success or error)
                 Task { @MainActor in
                     viewModel.processingTransferIDs.remove(transferID)
                     viewModel.isLoading = false
-                    print("--- ContentView: Removed transferID \(transferID) from processing set. ---")
+                    print("--- ContentView: Removed transferID \(transferID) from processing set.")
                 }
             }
             
@@ -356,7 +295,7 @@ struct ContentView: View {
                 )
                 
                 // Success!
-                // Perform delay *before* switching to main actor for UI updates
+                // Perform delay before switching to main actor for UI updates
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 
                 await MainActor.run {
@@ -370,7 +309,397 @@ struct ContentView: View {
                     viewModel.alertType = nil
                     viewModel.showAlert = true
                     
-                    print("--- ContentView: Message updated with decrypted file URL (after delay) ---")
+                    print("--- ContentView: Message updated with decrypted file URL (after delay)")
+                }
+            } catch {
+                await MainActor.run {
+                    print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
+                    viewModel.alertMessage = "Error processing file: \(error.localizedDescription)"
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                }
+            }
+        }
+    }
+}
+
+struct CustomTabBar: View {
+    @Binding var selectedTab: Int
+    let tabItems: [(icon: String, label: String)]
+
+    var body: some View {
+        HStack {
+            ForEach(0..<tabItems.count, id: \ .self) { idx in
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        selectedTab = idx
+                    }
+                }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: tabItems[idx].icon)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(selectedTab == idx ? Theme.accent : Theme.secondaryText)
+                            .scaleEffect(selectedTab == idx ? 1.18 : 1.0)
+                            .shadow(color: selectedTab == idx ? Theme.accent.opacity(0.3) : .clear, radius: 8, x: 0, y: 2)
+                            .padding(10)
+                            .background(
+                                Circle()
+                                    .fill(Theme.card)
+                                    .shadow(color: selectedTab == idx ? Theme.accent.opacity(0.15) : Theme.shadowDark.opacity(0.08), radius: 8, x: 0, y: 2)
+                            )
+                        Text(tabItems[idx].label)
+                            .font(.caption2)
+                            .foregroundColor(selectedTab == idx ? Theme.accent : Theme.secondaryText)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Theme.background)
+        .neumorphic()
+        .shadow(radius: 2)
+    }
+}
+
+// Вынесенный основной чат-экран для TabView
+struct ChatTabView: View {
+    @ObservedObject var viewModel: SafeRelayViewModel
+    @Binding var messageText: String
+    @Binding var showingFilePicker: Bool
+    @Binding var showingSecuritySettings: Bool
+    @Binding var isComposing: Bool
+    @Binding var shareablePackage: ShareableURL?
+    @Binding var fileContentPreview: String?
+    @State private var tokenizedText = ""
+    @State private var tokens: [String: String] = [:]
+    var onProfile: () -> Void
+    var onSettings: () -> Void
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                CustomNavBar(title: "SafeRelay+",
+                             onProfile: onProfile,
+                             onSettings: onSettings,
+                             onSearch: {},
+                             onShield: { showingSecuritySettings = true })
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingSecuritySettings)
+                SecurityStatusBar(viewModel: viewModel)
+                    .transition(.move(edge: .top))
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: Theme.elementSpacing) {
+                            ForEach(viewModel.messages) { message in
+                                MessageView(
+                                    message: message,
+                                    viewModel: viewModel,
+                                    shareablePackage: $shareablePackage,
+                                    fileContentPreview: $fileContentPreview
+                                )
+                                .id(message.id)
+                                .transition(.scale.combined(with: .opacity))
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.messages.count)
+                            }
+                        }
+                        .padding()
+                    }
+                    .onChange(of: viewModel.messages.count) { oldCount, newCount in
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+                VStack(spacing: 0) {
+                    if isComposing {
+                        HStack {
+                            Text("Security Level:")
+                                .font(.caption)
+                                .foregroundColor(Theme.secondaryText)
+                            Picker("Security Level", selection: $viewModel.securityLevel) {
+                                ForEach(SecurityLevel.allCases) { level in
+                                    Text(level.description).tag(level)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                    }
+                    HStack {
+                        TextField("Type a message...", text: $messageText)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    isComposing = true
+                                }
+                            }
+                        Button(action: { handleSendMessage() }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(messageText.isEmpty ? Theme.secondaryText : Theme.accent)
+                        }
+                        .disabled(messageText.isEmpty || viewModel.isLoading)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    if isComposing {
+                        HStack(spacing: Theme.elementSpacing) {
+                            if viewModel.securityLevel != .standard {
+                                Button(action: { 
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        showingFilePicker = true
+                                    }
+                                }) {
+                                    Label("File", systemImage: "paperclip")
+                                        .customButtonStyle()
+                                }
+                            }
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    viewModel.toggleEncryption()
+                                }
+                            }) {
+                                Label(
+                                    viewModel.isEncryptionEnabled ? "Encryption On" : "Encryption Off",
+                                    systemImage: viewModel.isEncryptionEnabled ? "lock.fill" : "lock.open"
+                                )
+                                .customButtonStyle()
+                            }
+                            .disabled(viewModel.securityLevel == .maximum)
+                            Spacer()
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom))
+                    }
+                }
+                .background(Color(.systemGray6))
+            }
+            .background(Theme.background)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .navigationBarHidden(true)
+            .sheet(isPresented: $showingSecuritySettings) {
+                SecuritySettingsView(viewModel: viewModel)
+            }
+            .sheet(item: $shareablePackage) { item in
+                if FileManager.default.fileExists(atPath: item.url.path) {
+                    ActivityView(activityItems: [item.url])
+                } else {
+                    VStack(spacing: Theme.smallSpacing) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.largeTitle)
+                        Text("Error Sharing File")
+                            .font(.headline)
+                        Text("Could not find the file part to share. It might have been deleted.")
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        Button("Dismiss") { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                shareablePackage = nil
+                            }
+                        }
+                        .customButtonStyle(isPrimary: true)
+                        .padding(.top)
+                    }
+                }
+            }
+            .alert(viewModel.alertMessage ?? "", isPresented: $viewModel.showAlert) {
+                Group {
+                    switch viewModel.alertType {
+                    case .sensitiveData:
+                        Button("Tokenize and Send") {
+                            let textToSend = messageText
+                            Task {
+                                await viewModel.tokenizeAndSendMessage(textToSend)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    messageText = ""
+                                    isComposing = false
+                                }
+                            }
+                        }
+                        Button("Send Anyway", role: .destructive) {
+                            Task {
+                                await viewModel.sendMessage(messageText)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    messageText = ""
+                                    isComposing = false
+                                }
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                        
+                    case .phishing:
+                        Button("Send Anyway", role: .destructive) {
+                            Task {
+                                await viewModel.sendMessage(messageText)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    messageText = ""
+                                    isComposing = false
+                                }
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                        
+                    case .fileAlreadyProcessed:
+                        Button("Open File") {
+                            if let decryptedURL = viewModel.messages.first(where: { $0.transferID == viewModel.processingTransferIDs.first })?.decryptedFileURL {
+                                UIApplication.shared.open(decryptedURL)
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                        
+                    case .none:
+                        Button("OK", role: .cancel) {}
+                    }
+                }
+            }
+            .fileImporter(
+                isPresented: $showingFilePicker,
+                allowedContentTypes: [.data],
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileImport(result)
+            }
+            .onChange(of: messageText) { oldValue, newValue in
+                handleMessageTextChange(newValue)
+            }
+            .onOpenURL { incomingURL in
+                handleIncomingURL(incomingURL)
+            }
+        }
+    }
+
+    private func handleSendMessage() {
+        let currentText = messageText
+        if currentText.isEmpty { return }
+        Task {
+            let sentDirectly = await viewModel.sendMessage(currentText)
+            if sentDirectly {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    messageText = ""
+                    isComposing = false
+                }
+            }
+        }
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                Task {
+                    await viewModel.sendFile(url)
+                }
+            }
+        case .failure(let error):
+            viewModel.alertMessage = "Error selecting file: \(error.localizedDescription)"
+            viewModel.showAlert = true
+        }
+    }
+
+    private func handleMessageTextChange(_ newValue: String) {
+        if !newValue.isEmpty {
+            let result = DataProtectionService.shared.tokenizeSensitiveData(newValue)
+            tokenizedText = result.tokenizedText
+            tokens = result.tokens
+        } else {
+            tokenizedText = ""
+            tokens = [:]
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        print("--- ContentView: Received URL via onOpenURL: \(url)")
+        guard url.isFileURL, url.pathExtension == "safeRelayPkg" else {
+            print("--- ContentView: Incoming URL is not a valid .safeRelayPkg file.")
+            return
+        }
+        let filename = url.lastPathComponent
+        let parts = filename.split(separator: "_")
+        guard parts.count >= 3, parts[0] == "secondary" else {
+            print("--- ContentView: Could not extract transferID from filename: \(filename)")
+            return
+        }
+        let transferID = String(parts[1])
+        if viewModel.processingTransferIDs.contains(transferID) {
+            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request.")
+            return
+        }
+        guard let targetMessageIndex = viewModel.messages.firstIndex(where: { $0.transferID == transferID }) else {
+            print("--- ContentView: No message found for transferID: \(transferID)")
+            viewModel.alertMessage = "Original message not found for this file part."
+            viewModel.alertType = nil
+            viewModel.showAlert = true
+            return
+        }
+        let targetMessage = viewModel.messages[targetMessageIndex]
+        if let decryptedURL = targetMessage.decryptedFileURL {
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping.")
+            viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
+            viewModel.alertType = .fileAlreadyProcessed
+            viewModel.showAlert = true
+            return
+        }
+        guard let primaryURLString = targetMessage.primaryPartURLString,
+              let primaryURL = URL(string: primaryURLString) else {
+            print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
+            viewModel.alertMessage = "Primary file part information is missing or invalid."
+            viewModel.alertType = nil
+            viewModel.showAlert = true
+            return
+        }
+        print("--- ContentView: Found matching message and primary URL. Starting reconstruction for \(transferID).")
+        viewModel.isLoading = true
+        viewModel.processingTransferIDs.insert(transferID)
+        Task {
+            defer {
+                Task { @MainActor in
+                    viewModel.processingTransferIDs.remove(transferID)
+                    viewModel.isLoading = false
+                    print("--- ContentView: Removed transferID \(transferID) from processing set.")
+                }
+            }
+            do {
+                guard url.startAccessingSecurityScopedResource() else {
+                    print("--- ContentView ERROR: Cannot access security scoped resource for URL: \(url.path)")
+                    throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
+                }
+                defer {
+                    url.stopAccessingSecurityScopedResource()
+                }
+                let secondaryPackageData: Data
+                do {
+                    secondaryPackageData = try Data(contentsOf: url)
+                } catch {
+                    print("--- ContentView ERROR: Failed to read secondary package data: \(error.localizedDescription)")
+                    throw FileTransmissionService.FileError.readError(error.localizedDescription)
+                }
+                let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
+                    primaryPartURL: primaryURL,
+                    secondaryPackageData: secondaryPackageData
+                )
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                await MainActor.run {
+                    print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
+                    viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
+                    viewModel.alertMessage = "File successfully reconstructed!"
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                    print("--- ContentView: Message updated with decrypted file URL (after delay)")
                 }
             } catch {
                 await MainActor.run {
@@ -396,7 +725,7 @@ struct SecurityStatusBar: View {
             .font(.caption)
             .padding(6)
             .background(viewModel.securityLevel.color.opacity(0.2))
-            .cornerRadius(4)
+            .cornerRadius(Theme.cornerRadius)
             
             Spacer()
             
@@ -406,18 +735,18 @@ struct SecurityStatusBar: View {
                     .foregroundColor(.green)
                     .padding(6)
                     .background(Color.green.opacity(0.1))
-                    .cornerRadius(4)
+                    .cornerRadius(Theme.cornerRadius)
             } else {
                 Label("Unencrypted", systemImage: "lock.open.fill")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .padding(6)
                     .background(Color.orange.opacity(0.1))
-                    .cornerRadius(4)
+                    .cornerRadius(Theme.cornerRadius)
             }
         }
         .padding(.horizontal)
-        .background(Color(.systemBackground))
+        .background(Theme.background)
         .shadow(radius: 1)
     }
 }
