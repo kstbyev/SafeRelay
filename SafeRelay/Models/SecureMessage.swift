@@ -44,4 +44,10 @@ struct SecureMessage: Identifiable, Codable {
         // Implementation for data tokenization
         return self
     }
+}
+
+extension SecureMessage {
+    var isSplit: Bool {
+        primaryPartURLString != nil && secondaryPackageURLString != nil
+    }
 } 

@@ -86,6 +86,7 @@ struct MessageView: View {
                               !secondaryURLString.isEmpty,
                               let secondaryURL = URL(string: secondaryURLString) {
                         Button {
+                            print("[DEBUG] Share Part 2 tapped: \(secondaryURL)")
                             self.shareablePackage = ShareableURL(url: secondaryURL)
                         } label: {
                             HStack(spacing: 2) {

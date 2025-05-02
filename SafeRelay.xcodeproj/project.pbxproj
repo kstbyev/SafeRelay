@@ -15,6 +15,8 @@
 		0413A1852DB6A50700856811 /* SafeRelay.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 0413A1832DB6A50700856811 /* SafeRelay.xcdatamodeld */; };
 		0413A1902DB6A78200856811 /* Preview Content in Resources */ = {isa = PBXBuildFile; fileRef = 0413A18E2DB6A78200856811 /* Preview Content */; };
 		0413A1932DB6A89400856811 /* SecureMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0413A1922DB6A89400856811 /* SecureMessage.swift */; };
+		044CBE602DC4C055005C145B /* OpenedFilesHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */; };
+		044CBE622DC4C070005C145B /* OpenedFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE612DC4C070005C145B /* OpenedFile.swift */; };
 		04D623DC2DB76FF800000853 /* PhishingProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623D82DB76FF800000853 /* PhishingProtectionService.swift */; };
 		04D623DD2DB76FF800000853 /* FileTransmissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623D92DB76FF800000853 /* FileTransmissionService.swift */; };
 		04D623DE2DB76FF800000853 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623DA2DB76FF800000853 /* KeychainService.swift */; };
@@ -27,6 +29,9 @@
 		04E7BF052DBD1BF5008E5753 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF042DBD1BF4008E5753 /* MessageView.swift */; };
 		04E7BF072DBD1C0C008E5753 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF062DBD1C0C008E5753 /* Theme.swift */; };
 		04E7BF092DBE4013008E5753 /* CustomNavBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF082DBE4013008E5753 /* CustomNavBar.swift */; };
+		04E7BF0B2DBFBE08008E5753 /* FilesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF0A2DBFBE08008E5753 /* FilesTabView.swift */; };
+		04E7BF0D2DBFBE10008E5753 /* FileRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E7BF0C2DBFBE0F008E5753 /* FileRow.swift */; };
+		04FBE2052DC12CCC007C18BF /* FilePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FBE2042DC12CCB007C18BF /* FilePreviewSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +46,8 @@
 		0413A1872DB6A50700856811 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0413A18E2DB6A78200856811 /* Preview Content */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Preview Content"; path = "SafeRelay/Preview Content"; sourceTree = "<group>"; };
 		0413A1922DB6A89400856811 /* SecureMessage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecureMessage.swift; sourceTree = "<group>"; };
+		044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFilesHistory.swift; sourceTree = "<group>"; };
+		044CBE612DC4C070005C145B /* OpenedFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFile.swift; sourceTree = "<group>"; };
 		04D623D82DB76FF800000853 /* PhishingProtectionService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhishingProtectionService.swift; sourceTree = "<group>"; };
 		04D623D92DB76FF800000853 /* FileTransmissionService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileTransmissionService.swift; sourceTree = "<group>"; };
 		04D623DA2DB76FF800000853 /* KeychainService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
@@ -53,6 +60,9 @@
 		04E7BF042DBD1BF4008E5753 /* MessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
 		04E7BF062DBD1C0C008E5753 /* Theme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		04E7BF082DBE4013008E5753 /* CustomNavBar.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CustomNavBar.swift; sourceTree = "<group>"; };
+		04E7BF0A2DBFBE08008E5753 /* FilesTabView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilesTabView.swift; sourceTree = "<group>"; };
+		04E7BF0C2DBFBE0F008E5753 /* FileRow.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileRow.swift; sourceTree = "<group>"; };
+		04FBE2042DC12CCB007C18BF /* FilePreviewSheet.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilePreviewSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +128,7 @@
 		0413A1912DB6A89400856811 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				044CBE612DC4C070005C145B /* OpenedFile.swift */,
 				04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */,
 				04E7BEFA2DB913D1008E5753 /* SensitiveData.swift */,
 				0413A1922DB6A89400856811 /* SecureMessage.swift */,
@@ -128,6 +139,7 @@
 		04D623D72DB76FF800000853 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */,
 				04D623D82DB76FF800000853 /* PhishingProtectionService.swift */,
 				04D623D92DB76FF800000853 /* FileTransmissionService.swift */,
 				04D623DA2DB76FF800000853 /* KeychainService.swift */,
@@ -156,6 +168,9 @@
 		04E7BF032DBD1BF4008E5753 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				04FBE2042DC12CCB007C18BF /* FilePreviewSheet.swift */,
+				04E7BF0C2DBFBE0F008E5753 /* FileRow.swift */,
+				04E7BF0A2DBFBE08008E5753 /* FilesTabView.swift */,
 				04E7BF042DBD1BF4008E5753 /* MessageView.swift */,
 			);
 			path = Components;
@@ -177,6 +192,8 @@
 			dependencies = (
 			);
 			name = SafeRelay;
+			packageProductDependencies = (
+			);
 			productName = SafeRelay;
 			productReference = 0413A1752DB6A50500856811 /* SafeRelay.app */;
 			productType = "com.apple.product-type.application";
@@ -205,6 +222,9 @@
 				Base,
 			);
 			mainGroup = 0413A16C2DB6A50500856811;
+			packageReferences = (
+				04FBE2062DC130F0007C18BF /* XCRemoteSwiftPackageReference "Transmission" */,
+			);
 			productRefGroup = 0413A1762DB6A50500856811 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -232,11 +252,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04FBE2052DC12CCC007C18BF /* FilePreviewSheet.swift in Sources */,
 				0413A1822DB6A50700856811 /* Persistence.swift in Sources */,
+				044CBE622DC4C070005C145B /* OpenedFile.swift in Sources */,
 				04D623DF2DB76FF800000853 /* DataProtectionService.swift in Sources */,
+				04E7BF0D2DBFBE10008E5753 /* FileRow.swift in Sources */,
+				04E7BF0B2DBFBE08008E5753 /* FilesTabView.swift in Sources */,
 				04E7BEFB2DB913D1008E5753 /* SensitiveData.swift in Sources */,
 				0413A17B2DB6A50500856811 /* ContentView.swift in Sources */,
 				04D623E22DB7701900000853 /* SafeRelayViewModel.swift in Sources */,
+				044CBE602DC4C055005C145B /* OpenedFilesHistory.swift in Sources */,
 				04E7BF052DBD1BF5008E5753 /* MessageView.swift in Sources */,
 				04D623DD2DB76FF800000853 /* FileTransmissionService.swift in Sources */,
 				04D623DE2DB76FF800000853 /* KeychainService.swift in Sources */,
@@ -456,6 +481,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		04FBE2062DC130F0007C18BF /* XCRemoteSwiftPackageReference "Transmission" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/nathantannar4/Transmission";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCVersionGroup section */
 		0413A1832DB6A50700856811 /* SafeRelay.xcdatamodeld */ = {

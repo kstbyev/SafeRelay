@@ -108,7 +108,8 @@ class FileTransmissionService {
         let idAndOriginal = primaryPartURL.lastPathComponent
                                     .replacingOccurrences(of: "primary_", with: "")
                                     .replacingOccurrences(of: ".safeRelayPart", with: "")
-        let decryptedFilename = "decrypted_\(idAndOriginal)"
+        let originalExtension = primaryPartURL.deletingPathExtension().pathExtension
+        let decryptedFilename = "decrypted_\(idAndOriginal)" + (originalExtension.isEmpty ? "" : ".\(originalExtension)")
         let decryptedFileURL = documentsDirectory.appendingPathComponent(decryptedFilename)
         
         // Check if file already exists and handle potential name conflicts if needed

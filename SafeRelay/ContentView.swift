@@ -27,6 +27,7 @@ struct ContentView: View {
     @State private var shareablePackage: ShareableURL?
     @State private var fileContentPreview: String?
     @State private var selectedTab: Int = 0
+    @State private var showSplash = true
     
     let tabItems: [(icon: String, label: String)] = [
         ("bubble.left.and.bubble.right.fill", "Chats"),
@@ -36,6 +37,44 @@ struct ContentView: View {
     ]
 
     var body: some View {
+        ZStack {
+            if showSplash {
+                SplashScreenView()
+                    .transition(.opacity)
+            } else {
+                mainContent
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeInOut(duration: 0.7)) {
+                    showSplash = false
+                }
+            }
+        }
+        .sheet(item: $shareablePackage) { item in
+            if FileManager.default.fileExists(atPath: item.url.path) {
+                ActivityView(activityItems: [item.url])
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.largeTitle)
+                    Text("Error Sharing File")
+                        .font(.headline)
+                    Text("Could not find the file part to share. It might have been deleted.")
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    Button("Dismiss") { shareablePackage = nil }
+                        .padding(.top)
+                }
+                .padding()
+            }
+        }
+    }
+    
+    var mainContent: some View {
         VStack(spacing: 0) {
             Group {
                 switch selectedTab {
@@ -53,22 +92,7 @@ struct ContentView: View {
                     )
                     .frame(maxHeight: .infinity)
                 case 1:
-                    NavigationView {
-                        VStack {
-                            CustomNavBar(title: "Files")
-                            Spacer()
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 60))
-                                .foregroundColor(Theme.accent)
-                                .padding()
-                            Text("Here wiil be your files")
-                                .font(Theme.bodyFont)
-                                .foregroundColor(Theme.secondaryText)
-                            Spacer()
-                        }
-                        .background(Theme.background)
-                        .navigationBarHidden(true)
-                    }
+                    FilesTabView(viewModel: viewModel, shareablePackage: $shareablePackage, fileContentPreview: $fileContentPreview)
                 case 2:
                     NavigationView {
                         VStack {
@@ -304,6 +328,10 @@ struct ContentView: View {
                     // Update message with decrypted file URL
                     viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
                     
+                    // Добавляю в историю открытых файлов
+                    let openedFile = OpenedFile(id: UUID(), filename: decryptedFileURL.lastPathComponent, url: decryptedFileURL, dateOpened: Date())
+                    OpenedFilesHistory.shared.add(openedFile)
+                    
                     // Show a standard alert that the user dismisses
                     viewModel.alertMessage = "File successfully reconstructed!"
                     viewModel.alertType = nil
@@ -493,80 +521,6 @@ struct ChatTabView: View {
             .sheet(isPresented: $showingSecuritySettings) {
                 SecuritySettingsView(viewModel: viewModel)
             }
-            .sheet(item: $shareablePackage) { item in
-                if FileManager.default.fileExists(atPath: item.url.path) {
-                    ActivityView(activityItems: [item.url])
-                } else {
-                    VStack(spacing: Theme.smallSpacing) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                            .font(.largeTitle)
-                        Text("Error Sharing File")
-                            .font(.headline)
-                        Text("Could not find the file part to share. It might have been deleted.")
-                            .font(.footnote)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        Button("Dismiss") { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                shareablePackage = nil
-                            }
-                        }
-                        .customButtonStyle(isPrimary: true)
-                        .padding(.top)
-                    }
-                }
-            }
-            .alert(viewModel.alertMessage ?? "", isPresented: $viewModel.showAlert) {
-                Group {
-                    switch viewModel.alertType {
-                    case .sensitiveData:
-                        Button("Tokenize and Send") {
-                            let textToSend = messageText
-                            Task {
-                                await viewModel.tokenizeAndSendMessage(textToSend)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    messageText = ""
-                                    isComposing = false
-                                }
-                            }
-                        }
-                        Button("Send Anyway", role: .destructive) {
-                            Task {
-                                await viewModel.sendMessage(messageText)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    messageText = ""
-                                    isComposing = false
-                                }
-                            }
-                        }
-                        Button("Cancel", role: .cancel) {}
-                        
-                    case .phishing:
-                        Button("Send Anyway", role: .destructive) {
-                            Task {
-                                await viewModel.sendMessage(messageText)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    messageText = ""
-                                    isComposing = false
-                                }
-                            }
-                        }
-                        Button("Cancel", role: .cancel) {}
-                        
-                    case .fileAlreadyProcessed:
-                        Button("Open File") {
-                            if let decryptedURL = viewModel.messages.first(where: { $0.transferID == viewModel.processingTransferIDs.first })?.decryptedFileURL {
-                                UIApplication.shared.open(decryptedURL)
-                            }
-                        }
-                        Button("Cancel", role: .cancel) {}
-                        
-                    case .none:
-                        Button("OK", role: .cancel) {}
-                    }
-                }
-            }
             .fileImporter(
                 isPresented: $showingFilePicker,
                 allowedContentTypes: [.data],
@@ -696,6 +650,10 @@ struct ChatTabView: View {
                 await MainActor.run {
                     print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
                     viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
+                    // Добавляю в историю открытых файлов
+                    let openedFile = OpenedFile(id: UUID(), filename: decryptedFileURL.lastPathComponent, url: decryptedFileURL, dateOpened: Date())
+                    OpenedFilesHistory.shared.add(openedFile)
+                    // Show a standard alert that the user dismisses
                     viewModel.alertMessage = "File successfully reconstructed!"
                     viewModel.alertType = nil
                     viewModel.showAlert = true
@@ -1275,6 +1233,80 @@ struct PDFPreviewController: UIViewControllerRepresentable {
         
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
             return url as QLPreviewItem
+        }
+    }
+}
+
+// SplashScreenView с анимацией SafeRelay+ и подписью
+struct SplashScreenView: View {
+    @State private var showTitle = false
+    @State private var showPlus = false
+    @State private var showSignature = false
+    @State private var plusOffset: CGFloat = -120
+    @State private var plusBounce = false
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom, spacing: 0) {
+                    if showTitle {
+                        Text("SafeRelay")
+                            .font(.system(size: 38, weight: .semibold, design: .rounded))
+                            .foregroundColor(.accentColor)
+                            .shadow(color: .accentColor.opacity(0.13), radius: 8, x: 0, y: 3)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    if showPlus {
+                        Text("+")
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .foregroundColor(Color.purple)
+                            .offset(y: plusOffset)
+                            .scaleEffect(plusBounce ? 1.12 : 1.0)
+                            .opacity(showPlus ? 1 : 0)
+                            .shadow(color: Color.purple.opacity(0.18), radius: 8, x: 0, y: 2)
+                            .padding(.leading, 6)
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.interpolatingSpring(stiffness: 180, damping: 13), value: plusOffset)
+                            .animation(.easeOut(duration: 0.18), value: plusBounce)
+                    }
+                }
+                Spacer()
+                if showSignature {
+                    Text("by Madi Sharipov")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .opacity(0.8)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .padding(.bottom, 32)
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) {
+                showTitle = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                showPlus = true
+                withAnimation(.interpolatingSpring(stiffness: 180, damping: 13)) {
+                    plusOffset = 0
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        plusBounce = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        withAnimation(.easeIn(duration: 0.18)) {
+                            plusBounce = false
+                        }
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+                withAnimation(.easeInOut(duration: 1.0)) {
+                    showSignature = true
+                }
+            }
         }
     }
 }
