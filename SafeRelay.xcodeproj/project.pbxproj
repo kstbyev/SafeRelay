@@ -17,6 +17,8 @@
 		0413A1932DB6A89400856811 /* SecureMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0413A1922DB6A89400856811 /* SecureMessage.swift */; };
 		044CBE602DC4C055005C145B /* OpenedFilesHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */; };
 		044CBE622DC4C070005C145B /* OpenedFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE612DC4C070005C145B /* OpenedFile.swift */; };
+		044CBE652DC50857005C145B /* CloudSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE632DC50857005C145B /* CloudSyncView.swift */; };
+		044CBE662DC50857005C145B /* SecurityAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE642DC50857005C145B /* SecurityAnalyticsView.swift */; };
 		04D623DC2DB76FF800000853 /* PhishingProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623D82DB76FF800000853 /* PhishingProtectionService.swift */; };
 		04D623DD2DB76FF800000853 /* FileTransmissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623D92DB76FF800000853 /* FileTransmissionService.swift */; };
 		04D623DE2DB76FF800000853 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D623DA2DB76FF800000853 /* KeychainService.swift */; };
@@ -48,6 +50,8 @@
 		0413A1922DB6A89400856811 /* SecureMessage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecureMessage.swift; sourceTree = "<group>"; };
 		044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFilesHistory.swift; sourceTree = "<group>"; };
 		044CBE612DC4C070005C145B /* OpenedFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFile.swift; sourceTree = "<group>"; };
+		044CBE632DC50857005C145B /* CloudSyncView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudSyncView.swift; sourceTree = "<group>"; };
+		044CBE642DC50857005C145B /* SecurityAnalyticsView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecurityAnalyticsView.swift; sourceTree = "<group>"; };
 		04D623D82DB76FF800000853 /* PhishingProtectionService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhishingProtectionService.swift; sourceTree = "<group>"; };
 		04D623D92DB76FF800000853 /* FileTransmissionService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileTransmissionService.swift; sourceTree = "<group>"; };
 		04D623DA2DB76FF800000853 /* KeychainService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
@@ -168,6 +172,8 @@
 		04E7BF032DBD1BF4008E5753 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				044CBE632DC50857005C145B /* CloudSyncView.swift */,
+				044CBE642DC50857005C145B /* SecurityAnalyticsView.swift */,
 				04FBE2042DC12CCB007C18BF /* FilePreviewSheet.swift */,
 				04E7BF0C2DBFBE0F008E5753 /* FileRow.swift */,
 				04E7BF0A2DBFBE08008E5753 /* FilesTabView.swift */,
@@ -253,6 +259,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04FBE2052DC12CCC007C18BF /* FilePreviewSheet.swift in Sources */,
+				044CBE662DC50857005C145B /* SecurityAnalyticsView.swift in Sources */,
 				0413A1822DB6A50700856811 /* Persistence.swift in Sources */,
 				044CBE622DC4C070005C145B /* OpenedFile.swift in Sources */,
 				04D623DF2DB76FF800000853 /* DataProtectionService.swift in Sources */,
@@ -269,6 +276,7 @@
 				04E7BF092DBE4013008E5753 /* CustomNavBar.swift in Sources */,
 				04E7BEFD2DBA3D1D008E5753 /* DatabaseManager.swift in Sources */,
 				04D623DC2DB76FF800000853 /* PhishingProtectionService.swift in Sources */,
+				044CBE652DC50857005C145B /* CloudSyncView.swift in Sources */,
 				0413A1792DB6A50500856811 /* SafeRelayApp.swift in Sources */,
 				0413A1932DB6A89400856811 /* SecureMessage.swift in Sources */,
 				04E7BF072DBD1C0C008E5753 /* Theme.swift in Sources */,

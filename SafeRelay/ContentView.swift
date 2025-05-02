@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var fileContentPreview: String?
     @State private var selectedTab: Int = 0
     @State private var showSplash = true
+    @AppStorage("appColorScheme") private var appColorScheme: String = "system"
     
     let tabItems: [(icon: String, label: String)] = [
         ("bubble.left.and.bubble.right.fill", "Chats"),
@@ -45,6 +46,7 @@ struct ContentView: View {
                 mainContent
             }
         }
+        .preferredColorScheme(appColorScheme == "dark" ? .dark : appColorScheme == "light" ? .light : nil)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 withAnimation(.easeInOut(duration: 0.7)) {
@@ -95,20 +97,66 @@ struct ContentView: View {
                     FilesTabView(viewModel: viewModel, shareablePackage: $shareablePackage, fileContentPreview: $fileContentPreview)
                 case 2:
                     NavigationView {
-                        VStack {
-                            CustomNavBar(title: "Настройки")
-                            Spacer()
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 60))
-                                .foregroundColor(Theme.accent)
-                                .padding()
-                            Text("Настройки приложения")
-                                .font(Theme.bodyFont)
-                                .foregroundColor(Theme.secondaryText)
-                            Spacer()
+                        List {
+                            Section(header: Label("Appearance", systemImage: "paintbrush").font(.headline)) {
+                                HStack {
+                                    Text("Theme")
+                                    Spacer()
+                                    Menu {
+                                        Button("System", action: { appColorScheme = "system" })
+                                        Button("Light", action: { appColorScheme = "light" })
+                                        Button("Dark", action: { appColorScheme = "dark" })
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: appColorScheme == "dark" ? "moon.fill" : appColorScheme == "light" ? "sun.max.fill" : "circle.lefthalf.filled")
+                                                .foregroundColor(.accentColor)
+                                            Text(appColorScheme == "dark" ? "Dark" : appColorScheme == "light" ? "Light" : "System")
+                                                .foregroundColor(Theme.secondaryText)
+                                        }
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 10)
+                                        .background(Theme.card)
+                                        .cornerRadius(10)
+                                    }
+                                }
+                            }
+                            Section(header: Label("Language", systemImage: "globe").font(.headline)) {
+                                HStack {
+                                    Text("App Language")
+                                    Spacer()
+                                    Text("English")
+                                        .foregroundColor(Theme.secondaryText)
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 10)
+                                        .background(Theme.card)
+                                        .cornerRadius(10)
+                                }
+                            }
+                            Section(header: Label("Security", systemImage: "shield").font(.headline)) {
+                                NavigationLink(destination: SecurityAnalyticsView(viewModel: viewModel)) {
+                                    Label("Security Analytics", systemImage: "chart.bar.fill")
+                                }
+                                NavigationLink(destination: CloudSyncView(viewModel: viewModel)) {
+                                    Label("Cloud Sync", systemImage: "icloud")
+                                }
+                            }
+                            Section(header: Label("About", systemImage: "info.circle").font(.headline)) {
+                                HStack {
+                                    Text("Version")
+                                    Spacer()
+                                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                                        .foregroundColor(Theme.secondaryText)
+                                }
+                                Link(destination: URL(string: "https://safepolicy.example.com")!) {
+                                    Label("Privacy Policy", systemImage: "doc.text")
+                                        .foregroundColor(Theme.accent)
+                                }
+                            }
                         }
+                        .listStyle(InsetGroupedListStyle())
                         .background(Theme.background)
                         .navigationBarHidden(true)
+                        .navigationTitle("Settings")
                     }
                 case 3:
                     NavigationView {
@@ -131,7 +179,7 @@ struct ContentView: View {
                     EmptyView()
                 }
             }
-            CustomTabBar(selectedTab: $selectedTab, tabItems: tabItems)
+            CustomTabBar(selectedTab: $selectedTab, tabItems: tabItems, appColorScheme: $appColorScheme)
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
@@ -354,6 +402,7 @@ struct ContentView: View {
 struct CustomTabBar: View {
     @Binding var selectedTab: Int
     let tabItems: [(icon: String, label: String)]
+    @Binding var appColorScheme: String
 
     var body: some View {
         HStack {
@@ -383,6 +432,18 @@ struct CustomTabBar: View {
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
             }
+            // Кнопка смены темы
+            Menu {
+                Button("Системная", action: { appColorScheme = "system" })
+                Button("Светлая", action: { appColorScheme = "light" })
+                Button("Тёмная", action: { appColorScheme = "dark" })
+            } label: {
+                Image(systemName: appColorScheme == "dark" ? "moon.fill" : appColorScheme == "light" ? "sun.max.fill" : "circle.lefthalf.filled")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.accentColor)
+                    .padding(10)
+            }
+            .frame(maxWidth: 44)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
@@ -403,6 +464,7 @@ struct ChatTabView: View {
     @Binding var fileContentPreview: String?
     @State private var tokenizedText = ""
     @State private var tokens: [String: String] = [:]
+    @State private var isAtBottom: Bool = true
     var onProfile: () -> Void
     var onSettings: () -> Void
 
@@ -420,27 +482,54 @@ struct ChatTabView: View {
                 SecurityStatusBar(viewModel: viewModel)
                     .transition(.move(edge: .top))
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: Theme.elementSpacing) {
-                            ForEach(viewModel.messages) { message in
-                                MessageView(
-                                    message: message,
-                                    viewModel: viewModel,
-                                    shareablePackage: $shareablePackage,
-                                    fileContentPreview: $fileContentPreview
-                                )
-                                .id(message.id)
-                                .transition(.scale.combined(with: .opacity))
-                                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.messages.count)
+                    ZStack(alignment: .bottomTrailing) {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: Theme.elementSpacing) {
+                                ForEach(viewModel.messages) { message in
+                                    MessageView(
+                                        message: message,
+                                        viewModel: viewModel,
+                                        shareablePackage: $shareablePackage,
+                                        fileContentPreview: $fileContentPreview
+                                    )
+                                    .id(message.id)
+                                    .transition(.scale.combined(with: .opacity))
+                                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.messages.count)
+                                }
+                            }
+                            .padding()
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("chatScroll")).maxY)
+                                }
+                            )
+                        }
+                        .coordinateSpace(name: "chatScroll")
+                        .onChange(of: viewModel.messages.count) { oldCount, newCount in
+                            if let lastMessage = viewModel.messages.last {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                }
                             }
                         }
-                        .padding()
-                    }
-                    .onChange(of: viewModel.messages.count) { oldCount, newCount in
-                        if let lastMessage = viewModel.messages.last {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        if !isAtBottom {
+                            Button(action: {
+                                if let lastMessage = viewModel.messages.last {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                    }
+                                }
+                            }) {
+                                Image(systemName: "chevron.down.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(Theme.accent)
+                                    .shadow(radius: 4)
+                                    .padding()
                             }
+                            .transition(.scale.combined(with: .opacity))
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 32)
                         }
                     }
                 }
@@ -533,6 +622,13 @@ struct ChatTabView: View {
             }
             .onOpenURL { incomingURL in
                 handleIncomingURL(incomingURL)
+            }
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                let threshold: CGFloat = 80 // px
+                if let lastMessage = viewModel.messages.last {
+                    // Если скролл близко к низу, считаем что пользователь внизу
+                    isAtBottom = value < threshold
+                }
             }
         }
     }
@@ -1313,5 +1409,12 @@ struct SplashScreenView: View {
 
 #Preview {
     ContentView()
+}
+
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 

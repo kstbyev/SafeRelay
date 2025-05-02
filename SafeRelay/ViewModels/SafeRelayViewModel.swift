@@ -28,6 +28,11 @@ class SafeRelayViewModel: ObservableObject {
     @Published var showMessagePreview: Bool = true
     @Published var saveToDevice: Bool = true
     
+    // MARK: - Security Analytics
+    @Published var protectedMessagesCount: Int = 0
+    @Published var encryptedFilesCount: Int = 0
+    @Published var tokensFoundCount: Int = 0
+    
     private let dataProtectionService = DataProtectionService.shared
     private let phishingProtectionService = PhishingProtectionService.shared
     private let fileTransmissionService = FileTransmissionService.shared
@@ -43,6 +48,7 @@ class SafeRelayViewModel: ObservableObject {
         loadSettings()
         loadMessages() // Now this should work
         updateSettingsForSecurityLevel()
+        updateSecurityAnalytics()
     }
     
     private func loadSettings() {
@@ -135,11 +141,13 @@ class SafeRelayViewModel: ObservableObject {
             // Auto-tokenize or force tokenize on Maximum
             print("--- DEBUG: Sensitive data detected, auto/force tokenizing (Level: \(securityLevel)) ---")
             await tokenizeAndSendMessage(content)
+            updateSecurityAnalytics()
             return true // Message sent after tokenization
         } else {
             // No sensitive data or already handled
             print("--- DEBUG: No sensitive data detected or handled, sending directly ---")
             createAndSaveMessage(content: content, tokenizedContent: nil, tokens: [:], originalFilename: nil)
+            updateSecurityAnalytics()
             return true // Message sent directly
         }
     }
@@ -167,6 +175,7 @@ class SafeRelayViewModel: ObservableObject {
         
         print("--- DEBUG: Creating message (tokenized) ---")
         createAndSaveMessage(content: content, tokenizedContent: tokenizedText, tokens: result.tokens, originalFilename: nil)
+        updateSecurityAnalytics()
     }
     
     // --- Helper for Creating and Saving --- 
@@ -284,6 +293,7 @@ class SafeRelayViewModel: ObservableObject {
             alertType = nil
             showAlert = true
         }
+        updateSecurityAnalytics()
     }
     
     private func extractURL(from text: String) -> String? {
@@ -340,6 +350,12 @@ class SafeRelayViewModel: ObservableObject {
             }
             print("--- ViewModel: Updated message with decrypted file URL for transferID: \(transferID)")
         }
+    }
+    
+    private func updateSecurityAnalytics() {
+        protectedMessagesCount = messages.filter { $0.isEncrypted }.count
+        encryptedFilesCount = messages.filter { $0.primaryPartURLString != nil && $0.isEncrypted }.count
+        tokensFoundCount = messages.filter { $0.tokenizedContent != nil }.count
     }
 }
 
