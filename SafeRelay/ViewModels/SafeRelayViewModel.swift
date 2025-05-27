@@ -3,6 +3,7 @@ import SwiftUI
 import CryptoKit
 import NaturalLanguage
 import Combine
+// import SafeRelay.Models.SecurityLevel // Удаляю, если не работает
 
 @MainActor
 class SafeRelayViewModel: ObservableObject {
@@ -112,12 +113,12 @@ class SafeRelayViewModel: ObservableObject {
         defer { isLoading = false }
 
         // --- Maximum Level Enforcement ---
-        if securityLevel == .maximum {
+        if securityLevel == SecurityLevel.maximum {
             isEncryptionEnabled = true // Ensure encryption is always on
         }
 
         // --- Phishing Detection (Enhanced & Maximum) ---
-        if securityLevel == .enhanced || securityLevel == .maximum {
+        if securityLevel == .enhanced || securityLevel == SecurityLevel.maximum {
             let phishingDetected = DataProtectionService.shared.detectPhishing(content)
             if !phishingDetected.isEmpty {
                 alertMessage = "Potential phishing attempt detected: \(phishingDetected.joined(separator: ", ")). Send anyway?"
@@ -130,14 +131,14 @@ class SafeRelayViewModel: ObservableObject {
 
         // --- Sensitive Data Detection ---
         let detectedData = DataProtectionService.shared.detectSensitiveData(content)
-        if !detectedData.isEmpty && !autoTokenize && securityLevel != .maximum {
+        if !detectedData.isEmpty && !autoTokenize && securityLevel != SecurityLevel.maximum {
             // Ask user if not auto-tokenizing and not Maximum level
             alertMessage = "Sensitive data detected. Tokenize before sending?"
             alertType = .sensitiveData
             showAlert = true
             print("--- DEBUG: Sensitive data detected, showing alert (Manual/Standard/Enhanced) ---")
             return false // Show alert, don't send yet
-        } else if !detectedData.isEmpty && (autoTokenize || securityLevel == .maximum) {
+        } else if !detectedData.isEmpty && (autoTokenize || securityLevel == SecurityLevel.maximum) {
             // Auto-tokenize or force tokenize on Maximum
             print("--- DEBUG: Sensitive data detected, auto/force tokenizing (Level: \(securityLevel)) ---")
             await tokenizeAndSendMessage(content)
@@ -159,7 +160,7 @@ class SafeRelayViewModel: ObservableObject {
         print("Input content: [\(content)]")
         
         // --- Maximum Level Enforcement ---
-        if securityLevel == .maximum {
+        if securityLevel == SecurityLevel.maximum {
             isEncryptionEnabled = true // Ensure encryption is always on
         }
 
@@ -178,10 +179,10 @@ class SafeRelayViewModel: ObservableObject {
         updateSecurityAnalytics()
     }
     
-    // --- Helper for Creating and Saving --- 
+    // --- Helper for Creating and Saving ---
     private func createAndSaveMessage(content: String, tokenizedContent: String?, tokens: [String: String], primaryPartURLString: String? = nil, secondaryPackageURLString: String? = nil, transferID: String? = nil, originalFilename: String? = nil) {
         // Enforce encryption on Maximum level
-        let encrypted = (securityLevel == .maximum) ? true : isEncryptionEnabled
+        let encrypted = (securityLevel == SecurityLevel.maximum) ? true : isEncryptionEnabled
         
         // Use the updated memberwise initializer for SecureMessage
         let message = SecureMessage(
@@ -204,7 +205,7 @@ class SafeRelayViewModel: ObservableObject {
         print("Created message - content: [\(message.content)], tokenized: [\(message.tokenizedContent ?? "nil")], encrypted: \(message.isEncrypted)")
 
         // Uncomment saving to DB
-        if saveToDevice || securityLevel != .maximum { 
+        if saveToDevice || securityLevel != SecurityLevel.maximum {
             dbManager.saveMessage(message)
             print("--- DEBUG: Message saved to DB (SaveToDevice: \(saveToDevice), Level: \(securityLevel)) ---")
         } else {
@@ -225,8 +226,8 @@ class SafeRelayViewModel: ObservableObject {
         }
         
         // Enforce settings for Maximum level
-        let shouldSplit = (securityLevel == .maximum) ? true : splitFiles
-        let shouldEncrypt = (securityLevel == .maximum) ? true : encryptFiles
+        let shouldSplit = (securityLevel == SecurityLevel.maximum) ? true : splitFiles
+        let shouldEncrypt = (securityLevel == SecurityLevel.maximum) ? true : encryptFiles
         
         print("--- ViewModel: Preparing to send file \(fileURL.lastPathComponent). Split=\(shouldSplit), Encrypt=\(shouldEncrypt)")
         
@@ -314,7 +315,7 @@ class SafeRelayViewModel: ObservableObject {
     }
     
     func toggleEncryption() {
-        if securityLevel != .maximum {
+        if securityLevel != SecurityLevel.maximum {
             isEncryptionEnabled.toggle()
             print("Encryption toggled: \(isEncryptionEnabled)")
         } else {
@@ -326,7 +327,7 @@ class SafeRelayViewModel: ObservableObject {
     
     func loadMessages() {
         // Uncomment loading from DB
-        if saveToDevice { 
+        if saveToDevice {
             messages = dbManager.fetchMessages()
             print("Loaded \(messages.count) messages from DB.")
         } else {
@@ -338,11 +339,20 @@ class SafeRelayViewModel: ObservableObject {
     // Add this new method
     func updateMessageAfterReconstruction(transferID: String, decryptedFileURL: URL) {
         if let index = messages.firstIndex(where: { $0.transferID == transferID }) {
-            // Create a new message with updated properties
-            var updatedMessage = messages[index]
-            updatedMessage.decryptedFileURL = decryptedFileURL
-            // Update the message in the array
+            let oldMessage = messages[index]
+            let updatedMessage = SecureMessage(
+                content: oldMessage.content,
+                isFromCurrentUser: oldMessage.isFromCurrentUser,
+                isEncrypted: oldMessage.isEncrypted,
+                tokenizedContent: oldMessage.tokenizedContent,
+                primaryPartURLString: oldMessage.primaryPartURLString,
+                secondaryPackageURLString: oldMessage.secondaryPackageURLString,
+                transferID: oldMessage.transferID,
+                decryptedFileURL: decryptedFileURL,
+                originalFilename: oldMessage.originalFilename
+            )
             messages[index] = updatedMessage
+            objectWillChange.send()
             print("--- DEBUG: updatedMessage.decryptedFileURL = \(updatedMessage.decryptedFileURL?.path ?? "nil") ---")
             // Update in database if needed
             if saveToDevice {

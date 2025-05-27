@@ -12,26 +12,29 @@ struct FilesTabView: View {
     @State private var previewFileName: String = ""
     @State private var previewFileIcon: String = "doc"
     @State private var openedFiles: [OpenedFile] = []
+    @State private var showClearAlert = false
 
     var body: some View {
         NavigationView {
             List {
                 if !openedFiles.isEmpty {
                     Section(header: Text("Открытые через SafeRelay")) {
-                        ForEach(openedFiles.sorted(by: { $0.dateOpened > $1.dateOpened })) { file in
+                        ForEach(openedFiles.sorted(by: { $0.timestamp > $1.timestamp }), id: \.id) { file in
                             Button(action: {
-                                previewFile(url: file.url, fileName: file.filename)
+                                if let url = file.url {
+                                    previewFile(url: url, fileName: file.fileName)
+                                }
                             }) {
                                 HStack {
                                     Image(systemName: "doc.text")
                                         .font(.system(size: 28))
                                         .foregroundColor(.accentColor)
                                     VStack(alignment: .leading) {
-                                        Text(file.filename)
+                                        Text(file.fileName)
                                             .font(.system(size: 17, weight: .semibold))
                                             .foregroundColor(.primary)
                                             .lineLimit(1)
-                                        Text(file.dateOpened, style: .date)
+                                        Text(file.timestamp, style: .date)
                                             .font(.caption2)
                                             .foregroundColor(.gray)
                                     }
@@ -60,6 +63,27 @@ struct FilesTabView: View {
             }
             .navigationTitle("Files")
             .background(Theme.background)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(role: .destructive) {
+                        showClearAlert = true
+                    } label: {
+                        Label("Clear Files", systemImage: "trash")
+                    }
+                }
+            }
+            .alert(isPresented: $showClearAlert) {
+                Alert(
+                    title: Text("Очистить историю файлов?"),
+                    message: Text("Это действие удалит все открытые файлы и файлы в сообщениях безвозвратно."),
+                    primaryButton: .destructive(Text("Очистить")) {
+                        openedFiles.removeAll()
+                        OpenedFilesHistory.shared.clear()
+                        viewModel.messages.removeAll(where: { $0.decryptedFileURL != nil })
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
             .sheet(isPresented: $showPreview) {
                 FilePreviewSheet(
                     previewType: previewType,
@@ -139,3 +163,4 @@ struct FilesTabView: View {
         return "doc"
     }
 } 
+ 

@@ -73,6 +73,28 @@ class FileTransmissionService {
         return (primaryPartURL, secondaryPackageURL, transferID) // Return transferID
     }
     
+    // Helper function to copy file to sandbox if needed
+    private func copyToSandboxIfNeeded(_ url: URL) throws -> URL {
+        if url.startAccessingSecurityScopedResource() {
+            defer { url.stopAccessingSecurityScopedResource() }
+            return url
+        }
+        
+        // If we can't access the file directly, copy it to sandbox
+        let tempDir = FileManager.default.temporaryDirectory
+        let sandboxURL = tempDir.appendingPathComponent(url.lastPathComponent)
+        
+        // Remove existing file if it exists
+        if FileManager.default.fileExists(atPath: sandboxURL.path) {
+            try FileManager.default.removeItem(at: sandboxURL)
+        }
+        
+        // Copy file to sandbox
+        try FileManager.default.copyItem(at: url, to: sandboxURL)
+        print("--- FileService: Copied file to sandbox: \(sandboxURL.path)")
+        return sandboxURL
+    }
+    
     // New function to reconstruct and decrypt
     func reconstructAndDecryptFile(primaryPartURL: URL, secondaryPackageData: Data) async throws -> URL {
         print("--- FileService: Starting reconstruction ---")
@@ -84,13 +106,10 @@ class FileTransmissionService {
         let encryptionKey = SymmetricKey(data: keyData)
         print("--- FileService: Decoded secondary package, Key size: \(keyData.count * 8) bits ---")
 
-        // 2. Read the primary part data
-        guard primaryPartURL.startAccessingSecurityScopedResource() else {
-             throw FileError.accessDenied(primaryPartURL.lastPathComponent)
-        }
-        let primaryPartData = try Data(contentsOf: primaryPartURL)
-        primaryPartURL.stopAccessingSecurityScopedResource()
-         print("--- FileService: Read primary part (\(primaryPartData.count) bytes) ---")
+        // 2. Read the primary part data - with improved access handling
+        let accessiblePrimaryURL = try copyToSandboxIfNeeded(primaryPartURL)
+        let primaryPartData = try Data(contentsOf: accessiblePrimaryURL)
+        print("--- FileService: Read primary part (\(primaryPartData.count) bytes) ---")
 
         // 3. Combine encrypted parts
         let combinedEncryptedData = primaryPartData + secondaryPartData
@@ -104,7 +123,7 @@ class FileTransmissionService {
         // 5. Save decrypted data to Documents directory using the GENERATED filename
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         
-        // Reconstruct filename from primary part URL (as before)
+        // Reconstruct filename from primary part URL
         let idAndOriginal = primaryPartURL.lastPathComponent
                                     .replacingOccurrences(of: "primary_", with: "")
                                     .replacingOccurrences(of: ".safeRelayPart", with: "")
@@ -113,7 +132,10 @@ class FileTransmissionService {
         let decryptedFileURL = documentsDirectory.appendingPathComponent(decryptedFilename)
         
         // Check if file already exists and handle potential name conflicts if needed
-        // For now, we overwrite
+        if FileManager.default.fileExists(atPath: decryptedFileURL.path) {
+            try FileManager.default.removeItem(at: decryptedFileURL)
+        }
+        
         try decryptedData.write(to: decryptedFileURL)
         print("--- FileService: Saved decrypted file to: \(decryptedFileURL.path) ---")
 

@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 
 class OpenedFilesHistory {
     static let shared = OpenedFilesHistory()
@@ -20,10 +21,39 @@ class OpenedFilesHistory {
     
     func add(_ file: OpenedFile) {
         var files = load()
-        // Не добавлять дубликаты
-        if !files.contains(where: { $0.url == file.url }) {
+        // Don't add duplicate 
+        if !files.contains(where: { $0.urlString == file.urlString }) {
             files.append(file)
             save(files)
         }
     }
+    
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
+
+func authenticateUser(completion: @escaping (Bool) -> Void) {
+    let context = LAContext()
+    var error: NSError?
+    if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Access SafeRelay+") { success, _ in
+            completion(success)
+        }
+    } else {
+        completion(false)
+    }
+}
+
+func fetchConfigFromServer() {
+    let url = URL(string: "https://secure.safepolicy.example.com/config")!
+    var request = URLRequest(url: url)
+    request.timeoutInterval = 10
+    // SSL pinning
+    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        
+    }
+    task.resume()
 } 
+
+

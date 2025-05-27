@@ -5,7 +5,7 @@
 //  Created by Madi Sharipov on 21.04.2025.
 //
 
-import SwiftUI
+import SwiftUI 
 
 @main
 struct SafeRelayApp: App {

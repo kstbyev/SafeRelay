@@ -15,6 +15,7 @@
 		0413A1852DB6A50700856811 /* SafeRelay.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 0413A1832DB6A50700856811 /* SafeRelay.xcdatamodeld */; };
 		0413A1902DB6A78200856811 /* Preview Content in Resources */ = {isa = PBXBuildFile; fileRef = 0413A18E2DB6A78200856811 /* Preview Content */; };
 		0413A1932DB6A89400856811 /* SecureMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0413A1922DB6A89400856811 /* SecureMessage.swift */; };
+		0420310F2DD5F3CD000E6E60 /* SecurityLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0420310E2DD5F3CD000E6E60 /* SecurityLevel.swift */; };
 		044CBE602DC4C055005C145B /* OpenedFilesHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */; };
 		044CBE622DC4C070005C145B /* OpenedFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE612DC4C070005C145B /* OpenedFile.swift */; };
 		044CBE652DC50857005C145B /* CloudSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044CBE632DC50857005C145B /* CloudSyncView.swift */; };
@@ -48,6 +49,7 @@
 		0413A1872DB6A50700856811 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0413A18E2DB6A78200856811 /* Preview Content */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Preview Content"; path = "SafeRelay/Preview Content"; sourceTree = "<group>"; };
 		0413A1922DB6A89400856811 /* SecureMessage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecureMessage.swift; sourceTree = "<group>"; };
+		0420310E2DD5F3CD000E6E60 /* SecurityLevel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecurityLevel.swift; sourceTree = "<group>"; };
 		044CBE5F2DC4C054005C145B /* OpenedFilesHistory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFilesHistory.swift; sourceTree = "<group>"; };
 		044CBE612DC4C070005C145B /* OpenedFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenedFile.swift; sourceTree = "<group>"; };
 		044CBE632DC50857005C145B /* CloudSyncView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudSyncView.swift; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 		0413A1772DB6A50500856811 /* SafeRelay */ = {
 			isa = PBXGroup;
 			children = (
+				041E3FB52DD5EC800070E887 /* Views */,
 				04E7BF032DBD1BF4008E5753 /* Components */,
 				04D623E02DB7701900000853 /* ViewModels */,
 				04D623D72DB76FF800000853 /* Services */,
@@ -132,12 +135,20 @@
 		0413A1912DB6A89400856811 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				0420310E2DD5F3CD000E6E60 /* SecurityLevel.swift */,
 				044CBE612DC4C070005C145B /* OpenedFile.swift */,
 				04E7BEFC2DBA3D1D008E5753 /* DatabaseManager.swift */,
 				04E7BEFA2DB913D1008E5753 /* SensitiveData.swift */,
 				0413A1922DB6A89400856811 /* SecureMessage.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		041E3FB52DD5EC800070E887 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		04D623D72DB76FF800000853 /* Services */ = {
@@ -270,6 +281,7 @@
 				04D623E22DB7701900000853 /* SafeRelayViewModel.swift in Sources */,
 				044CBE602DC4C055005C145B /* OpenedFilesHistory.swift in Sources */,
 				04E7BF052DBD1BF5008E5753 /* MessageView.swift in Sources */,
+				0420310F2DD5F3CD000E6E60 /* SecurityLevel.swift in Sources */,
 				04D623DD2DB76FF800000853 /* FileTransmissionService.swift in Sources */,
 				04D623DE2DB76FF800000853 /* KeychainService.swift in Sources */,
 				0413A1852DB6A50700856811 /* SafeRelay.xcdatamodeld in Sources */,

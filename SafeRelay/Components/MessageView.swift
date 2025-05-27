@@ -163,57 +163,89 @@ struct MessageView: View {
     }
     
     private func handleFileOpen() {
-        if let url = currentMessage.decryptedFileURL {
-            if isPDFFile(url) {
-                handlePDFFile(url)
-            } else if isTextFile(url) {
-                handleTextFile(url)
-            } else if isImageFile(url) {
-                handleImageFile(url)
-            } else {
-                handleOtherFile(url)
-            }
+        guard let url = currentMessage.decryptedFileURL else {
+            print("--- DEBUG: No decrypted file URL available ---")
+            return
+        }
+        
+        print("--- DEBUG: Opening file at URL: \(url.path) ---")
+        if isPDFFile(url) {
+            handlePDFFile(url)
+        } else if isTextFile(url) {
+            handleTextFile(url)
+        } else if isImageFile(url) {
+            handleImageFile(url)
+        } else {
+            handleOtherFile(url)
         }
     }
     
     private func handlePDFFile(_ url: URL) {
+        print("--- DEBUG: Handling PDF file at URL: \(url.path) ---")
         let pdfURL = url.deletingPathExtension().appendingPathExtension("pdf")
         do {
             if FileManager.default.fileExists(atPath: pdfURL.path) {
                 try FileManager.default.removeItem(at: pdfURL)
             }
             try FileManager.default.copyItem(at: url, to: pdfURL)
+            print("--- DEBUG: Successfully copied PDF file to: \(pdfURL.path) ---")
             
             let previewController = PDFPreviewController(url: pdfURL)
             let hostingController = UIHostingController(rootView: previewController)
-            UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(hostingController, animated: true)
+                print("--- DEBUG: Successfully presented PDF preview ---")
+            } else {
+                print("--- DEBUG ERROR: Could not find root view controller ---")
+            }
         } catch {
+            print("--- DEBUG ERROR: Failed to handle PDF file: \(error.localizedDescription) ---")
             let previewController = PDFPreviewController(url: url)
             let hostingController = UIHostingController(rootView: previewController)
-            UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(hostingController, animated: true)
+                print("--- DEBUG: Successfully presented PDF preview with original URL ---")
+            } else {
+                print("--- DEBUG ERROR: Could not find root view controller ---")
+            }
         }
     }
     
     private func handleTextFile(_ url: URL) {
+        print("--- DEBUG: Handling text file at URL: \(url.path) ---")
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
+            print("--- DEBUG: Successfully read text content, length: \(content.count) characters ---")
             fileContentPreview = content
             showingFilePreview = true
+            print("--- DEBUG: Set file preview to show ---")
         } catch {
+            print("--- DEBUG ERROR: Failed to read text file: \(error.localizedDescription) ---")
             if UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url)
+                print("--- DEBUG: Successfully opened file externally ---")
+            } else {
+                print("--- DEBUG ERROR: Cannot open file externally ---")
             }
         }
     }
     
     private func handleImageFile(_ url: URL) {
+        print("--- DEBUG: Handling image file at URL: \(url.path) ---")
         fileContentPreview = "Image file: \(url.lastPathComponent)"
         showingFilePreview = true
+        print("--- DEBUG: Set image preview to show ---")
     }
     
     private func handleOtherFile(_ url: URL) {
+        print("--- DEBUG: Handling other file at URL: \(url.path) ---")
         if UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
+            print("--- DEBUG: Successfully opened file externally ---")
+        } else {
+            print("--- DEBUG ERROR: Cannot open file externally ---")
         }
     }
     

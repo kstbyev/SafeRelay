@@ -155,9 +155,9 @@ struct AnalyticsCard: View {
         .padding()
         .background(Theme.card)
         .cornerRadius(Theme.cornerRadius)
-        .shadow(color: Theme.shadowDark.opacity(isHovered ? 0.15 : 0.1), 
-                radius: isHovered ? 8 : 5, 
-                x: 0, 
+        .shadow(color: Theme.shadowDark.opacity(isHovered ? 0.15 : 0.1),
+                radius: isHovered ? 8 : 5,
+                x: 0,
                 y: isHovered ? 4 : 2)
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
@@ -171,4 +171,4 @@ struct AnalyticsCard: View {
     NavigationView {
         SecurityAnalyticsView(viewModel: SafeRelayViewModel())
     }
-} 
+}

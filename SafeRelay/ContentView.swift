@@ -33,8 +33,7 @@ struct ContentView: View {
     let tabItems: [(icon: String, label: String)] = [
         ("bubble.left.and.bubble.right.fill", "Chats"),
         ("doc.on.doc", "Files"),
-        ("gearshape", "Setti"),
-        ("person.crop.circle", "Pfofile")
+        ("gearshape", "Settings")
     ]
 
     var body: some View {
@@ -72,6 +71,11 @@ struct ContentView: View {
                         .padding(.top)
                 }
                 .padding()
+            }
+        }
+        .onOpenURL { url in
+            if url.pathExtension.lowercased() == "saferelaypkg" {
+                handleIncomingURL(url)
             }
         }
     }
@@ -157,23 +161,6 @@ struct ContentView: View {
                         .background(Theme.background)
                         .navigationBarHidden(true)
                         .navigationTitle("Settings")
-                    }
-                case 3:
-                    NavigationView {
-                        VStack {
-                            CustomNavBar(title: "Профиль")
-                            Spacer()
-                            Image(systemName: "person.crop.circle")
-                                .font(.system(size: 60))
-                                .foregroundColor(Theme.accent)
-                                .padding()
-                            Text("Ваш профиль")
-                                .font(Theme.bodyFont)
-                                .foregroundColor(Theme.secondaryText)
-                            Spacer()
-                        }
-                        .background(Theme.background)
-                        .navigationBarHidden(true)
                     }
                 default:
                     EmptyView()
@@ -276,56 +263,144 @@ struct ContentView: View {
     }
     
     private func handleIncomingURL(_ url: URL) {
-        print("--- ContentView: Received URL via onOpenURL: \(url)")
+        print("=== [SafeRelay] onOpenURL called ===")
+        print("URL: \(url)")
+        print("URL path: \(url.path)")
+        print("URL exists: \(FileManager.default.fileExists(atPath: url.path))")
+        print("App sandbox: \(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.deletingLastPathComponent().path ?? "nil")")
         
-        // Check if it's a file URL and has the expected extension
         guard url.isFileURL, url.pathExtension == "safeRelayPkg" else {
             print("--- ContentView: Incoming URL is not a valid .safeRelayPkg file.")
             return
         }
         
-        // Extract transferID from filename
         let filename = url.lastPathComponent
         let parts = filename.split(separator: "_")
+        print("Filename: \(filename), parts: \(parts)")
         guard parts.count >= 3, parts[0] == "secondary" else {
             print("--- ContentView: Could not extract transferID from filename: \(filename)")
             return
         }
-        let transferID = String(parts[1])
         
-        // Check if already processing
-        if viewModel.processingTransferIDs.contains(transferID) {
-            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request.")
-            return
+        let transferID = String(parts[1])
+        print("Extracted transferID: \(transferID)")
+        
+        // Copy file to sandbox if needed
+        var sandboxedURL = url
+        var needsCleanup = false
+        
+        if !url.startAccessingSecurityScopedResource() {
+            let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+            do {
+                if FileManager.default.fileExists(atPath: tmpURL.path) {
+                    try FileManager.default.removeItem(at: tmpURL)
+                }
+                try FileManager.default.copyItem(at: url, to: tmpURL)
+                print("Copied file to sandbox: \(tmpURL.path)")
+                sandboxedURL = tmpURL
+                needsCleanup = true
+            } catch {
+                print("Failed to copy file to sandbox: \(error.localizedDescription)")
+                viewModel.alertMessage = "Failed to copy file to sandbox: \(error.localizedDescription)"
+                viewModel.alertType = nil
+                viewModel.showAlert = true
+                return
+            }
         }
         
-        // Find the corresponding message
+        // Find the message and handle reconstruction
         guard let targetMessageIndex = viewModel.messages.firstIndex(where: { $0.transferID == transferID }) else {
             print("--- ContentView: No message found for transferID: \(transferID)")
-            viewModel.alertMessage = "Original message not found for this file part."
-            viewModel.alertType = nil
-            viewModel.showAlert = true
+            let allFiles = try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)
+            let primaryPart = allFiles?.first(where: { $0.lastPathComponent.contains(transferID) && $0.lastPathComponent.hasPrefix("primary_") })
+            
+            if let primaryURL = primaryPart, FileManager.default.fileExists(atPath: primaryURL.path) {
+                Task {
+                    do {
+                        let secondaryPackageData = try Data(contentsOf: sandboxedURL)
+                        let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
+                            primaryPartURL: primaryURL,
+                            secondaryPackageData: secondaryPackageData
+                        )
+                        
+                        await MainActor.run {
+                            let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+                            let ext = decryptedFileURL.pathExtension.lowercased()
+                            if textExtensions.contains(ext) {
+                                fileContentPreview = try? String(contentsOf: decryptedFileURL, encoding: .utf8)
+                            } else {
+                                viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                                viewModel.alertType = .fileAlreadyProcessed
+                                viewModel.showAlert = true
+                            }
+                        }
+                    } catch {
+                        await MainActor.run {
+                            print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
+                            viewModel.alertMessage = "Error processing file: \(error.localizedDescription)"
+                            viewModel.alertType = nil
+                            viewModel.showAlert = true
+                        }
+                    }
+                    
+                    // Clean up after reconstruction is complete
+                    url.stopAccessingSecurityScopedResource()
+                    if needsCleanup {
+                        try? FileManager.default.removeItem(at: sandboxedURL)
+                    }
+                }
+            } else {
+                Task { @MainActor in
+                    viewModel.alertMessage = "Primary part for this file is missing or inaccessible. Please re-import or resend the main part."
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                }
+                
+                // Clean up if we're not proceeding with reconstruction
+                url.stopAccessingSecurityScopedResource()
+                if needsCleanup {
+                    try? FileManager.default.removeItem(at: sandboxedURL)
+                }
+            }
             return
         }
         
         let targetMessage = viewModel.messages[targetMessageIndex]
         
-        // Check if already reconstructed
-        if let decryptedURL = targetMessage.decryptedFileURL {
-            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping.")
-            viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
-            viewModel.alertType = .fileAlreadyProcessed
-            viewModel.showAlert = true
+        // Check if file is already reconstructed
+        if let decryptedURL = targetMessage.decryptedFileURL, FileManager.default.fileExists(atPath: decryptedURL.path) {
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed and file exists. Showing open UI.")
+            let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+            let ext = decryptedURL.pathExtension.lowercased()
+            if textExtensions.contains(ext) {
+                fileContentPreview = try? String(contentsOf: decryptedURL, encoding: .utf8)
+            } else {
+                viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                viewModel.alertType = .fileAlreadyProcessed
+                viewModel.showAlert = true
+            }
+            
+            // Clean up since we're not proceeding with reconstruction
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
+            }
             return
         }
         
-        // Ensure primary part URL exists
+        // Get primary URL and start reconstruction
         guard let primaryURLString = targetMessage.primaryPartURLString,
               let primaryURL = URL(string: primaryURLString) else {
             print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
             viewModel.alertMessage = "Primary file part information is missing or invalid."
             viewModel.alertType = nil
             viewModel.showAlert = true
+            
+            // Clean up since we're not proceeding with reconstruction
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
+            }
             return
         }
         
@@ -343,48 +418,32 @@ struct ContentView: View {
             }
             
             do {
-                // Read the secondary package data
-                guard url.startAccessingSecurityScopedResource() else {
-                    print("--- ContentView ERROR: Cannot access security scoped resource for URL: \(url.path)")
-                    throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
-                }
-                defer {
-                    url.stopAccessingSecurityScopedResource()
-                }
-                
-                let secondaryPackageData: Data
-                do {
-                    secondaryPackageData = try Data(contentsOf: url)
-                } catch {
-                    print("--- ContentView ERROR: Failed to read secondary package data: \(error.localizedDescription)")
-                    throw FileTransmissionService.FileError.readError(error.localizedDescription)
-                }
-                
-                // Call the reconstruction service
+                let secondaryPackageData = try Data(contentsOf: sandboxedURL)
                 let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
                     primaryPartURL: primaryURL,
                     secondaryPackageData: secondaryPackageData
                 )
                 
-                // Success!
-                // Perform delay before switching to main actor for UI updates
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                try? await Task.sleep(nanoseconds: 100_000_000)
                 
                 await MainActor.run {
                     print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
-                    
-                    // Update message with decrypted file URL
                     viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
-                    
-                    // Добавляю в историю открытых файлов
-                    let openedFile = OpenedFile(id: UUID(), filename: decryptedFileURL.lastPathComponent, url: decryptedFileURL, dateOpened: Date())
+                    let openedFile = OpenedFile(url: decryptedFileURL, fileName: decryptedFileURL.lastPathComponent)
                     OpenedFilesHistory.shared.add(openedFile)
+                    fileContentPreview = nil
                     
-                    // Show a standard alert that the user dismisses
-                    viewModel.alertMessage = "File successfully reconstructed!"
-                    viewModel.alertType = nil
-                    viewModel.showAlert = true
-                    
+                    let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+                    let ext = decryptedFileURL.pathExtension.lowercased()
+                    if FileManager.default.fileExists(atPath: decryptedFileURL.path) {
+                        if textExtensions.contains(ext) {
+                            fileContentPreview = try? String(contentsOf: decryptedFileURL, encoding: .utf8)
+                        } else {
+                            viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                            viewModel.alertType = .fileAlreadyProcessed
+                            viewModel.showAlert = true
+                        }
+                    }
                     print("--- ContentView: Message updated with decrypted file URL (after delay)")
                 }
             } catch {
@@ -394,6 +453,12 @@ struct ContentView: View {
                     viewModel.alertType = nil
                     viewModel.showAlert = true
                 }
+            }
+            
+            // Clean up after reconstruction is complete
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
             }
         }
     }
@@ -465,6 +530,7 @@ struct ChatTabView: View {
     @State private var tokenizedText = ""
     @State private var tokens: [String: String] = [:]
     @State private var isAtBottom: Bool = true
+    @State private var showClearAlert = false
     var onProfile: () -> Void
     var onSettings: () -> Void
 
@@ -570,7 +636,7 @@ struct ChatTabView: View {
                     if isComposing {
                         HStack(spacing: Theme.elementSpacing) {
                             if viewModel.securityLevel != .standard {
-                                Button(action: { 
+                                Button(action: {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                         showingFilePicker = true
                                     }
@@ -607,6 +673,27 @@ struct ChatTabView: View {
             .background(Theme.background)
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationBarHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(role: .destructive) {
+                        showClearAlert = true
+                    } label: {
+                        Label("Clear Chats", systemImage: "trash")
+                    }
+                }
+            }
+            .alert(isPresented: $showClearAlert) {
+                Alert(
+                    title: Text("Очистить все чаты?"),
+                    message: Text("Это действие удалит все сообщения безвозвратно."),
+                    primaryButton: .destructive(Text("Очистить")) {
+                        viewModel.messages.removeAll()
+                        // Если есть сохранение в БД, тоже очистить
+                        // viewModel.clearAllMessages() если реализовано
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
             .sheet(isPresented: $showingSecuritySettings) {
                 SecuritySettingsView(viewModel: viewModel)
             }
@@ -620,8 +707,10 @@ struct ChatTabView: View {
             .onChange(of: messageText) { oldValue, newValue in
                 handleMessageTextChange(newValue)
             }
-            .onOpenURL { incomingURL in
-                handleIncomingURL(incomingURL)
+            .onOpenURL { url in
+                if url.pathExtension.lowercased() == "saferelaypkg" {
+                    handleIncomingURL(url)
+                }
             }
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
                 let threshold: CGFloat = 80 // px
@@ -673,48 +762,151 @@ struct ChatTabView: View {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        print("--- ContentView: Received URL via onOpenURL: \(url)")
+        print("=== [SafeRelay] onOpenURL called ===")
+        print("URL: \(url)")
+        print("URL path: \(url.path)")
+        print("URL exists: \(FileManager.default.fileExists(atPath: url.path))")
+        print("App sandbox: \(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.deletingLastPathComponent().path ?? "nil")")
+        
         guard url.isFileURL, url.pathExtension == "safeRelayPkg" else {
             print("--- ContentView: Incoming URL is not a valid .safeRelayPkg file.")
             return
         }
+        
         let filename = url.lastPathComponent
         let parts = filename.split(separator: "_")
+        print("Filename: \(filename), parts: \(parts)")
         guard parts.count >= 3, parts[0] == "secondary" else {
             print("--- ContentView: Could not extract transferID from filename: \(filename)")
             return
         }
+        
         let transferID = String(parts[1])
-        if viewModel.processingTransferIDs.contains(transferID) {
-            print("--- ContentView: Already processing transferID: \(transferID). Skipping duplicate request.")
-            return
+        print("Extracted transferID: \(transferID)")
+        
+        // Copy file to sandbox if needed
+        var sandboxedURL = url
+        var needsCleanup = false
+        
+        if !url.startAccessingSecurityScopedResource() {
+            let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+            do {
+                if FileManager.default.fileExists(atPath: tmpURL.path) {
+                    try FileManager.default.removeItem(at: tmpURL)
+                }
+                try FileManager.default.copyItem(at: url, to: tmpURL)
+                print("Copied file to sandbox: \(tmpURL.path)")
+                sandboxedURL = tmpURL
+                needsCleanup = true
+            } catch {
+                print("Failed to copy file to sandbox: \(error.localizedDescription)")
+                viewModel.alertMessage = "Failed to copy file to sandbox: \(error.localizedDescription)"
+                viewModel.alertType = nil
+                viewModel.showAlert = true
+                return
+            }
         }
+        
+        // Find the message and handle reconstruction
         guard let targetMessageIndex = viewModel.messages.firstIndex(where: { $0.transferID == transferID }) else {
             print("--- ContentView: No message found for transferID: \(transferID)")
-            viewModel.alertMessage = "Original message not found for this file part."
-            viewModel.alertType = nil
-            viewModel.showAlert = true
+            let allFiles = try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)
+            let primaryPart = allFiles?.first(where: { $0.lastPathComponent.contains(transferID) && $0.lastPathComponent.hasPrefix("primary_") })
+            
+            if let primaryURL = primaryPart, FileManager.default.fileExists(atPath: primaryURL.path) {
+                Task {
+                    do {
+                        let secondaryPackageData = try Data(contentsOf: sandboxedURL)
+                        let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
+                            primaryPartURL: primaryURL,
+                            secondaryPackageData: secondaryPackageData
+                        )
+                        
+                        await MainActor.run {
+                            let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+                            let ext = decryptedFileURL.pathExtension.lowercased()
+                            if textExtensions.contains(ext) {
+                                fileContentPreview = try? String(contentsOf: decryptedFileURL, encoding: .utf8)
+                            } else {
+                                viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                                viewModel.alertType = .fileAlreadyProcessed
+                                viewModel.showAlert = true
+                            }
+                        }
+                    } catch {
+                        await MainActor.run {
+                            print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
+                            viewModel.alertMessage = "Error processing file: \(error.localizedDescription)"
+                            viewModel.alertType = nil
+                            viewModel.showAlert = true
+                        }
+                    }
+                    
+                    // Clean up after reconstruction is complete
+                    url.stopAccessingSecurityScopedResource()
+                    if needsCleanup {
+                        try? FileManager.default.removeItem(at: sandboxedURL)
+                    }
+                }
+            } else {
+                Task { @MainActor in
+                    viewModel.alertMessage = "Primary part for this file is missing or inaccessible. Please re-import or resend the main part."
+                    viewModel.alertType = nil
+                    viewModel.showAlert = true
+                }
+                
+                // Clean up if we're not proceeding with reconstruction
+                url.stopAccessingSecurityScopedResource()
+                if needsCleanup {
+                    try? FileManager.default.removeItem(at: sandboxedURL)
+                }
+            }
             return
         }
+        
         let targetMessage = viewModel.messages[targetMessageIndex]
-        if let decryptedURL = targetMessage.decryptedFileURL {
-            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed. Skipping.")
-            viewModel.alertMessage = "This file has already been processed. Would you like to open it?"
-            viewModel.alertType = .fileAlreadyProcessed
-            viewModel.showAlert = true
+        
+        // Check if file is already reconstructed
+        if let decryptedURL = targetMessage.decryptedFileURL, FileManager.default.fileExists(atPath: decryptedURL.path) {
+            print("--- ContentView: File for transferID: \(transferID) has already been reconstructed and file exists. Showing open UI.")
+            let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+            let ext = decryptedURL.pathExtension.lowercased()
+            if textExtensions.contains(ext) {
+                fileContentPreview = try? String(contentsOf: decryptedURL, encoding: .utf8)
+            } else {
+                viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                viewModel.alertType = .fileAlreadyProcessed
+                viewModel.showAlert = true
+            }
+            
+            // Clean up since we're not proceeding with reconstruction
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
+            }
             return
         }
+        
+        // Get primary URL and start reconstruction
         guard let primaryURLString = targetMessage.primaryPartURLString,
               let primaryURL = URL(string: primaryURLString) else {
             print("--- ContentView: Primary part URL missing or invalid for transferID: \(transferID)")
             viewModel.alertMessage = "Primary file part information is missing or invalid."
             viewModel.alertType = nil
             viewModel.showAlert = true
+            
+            // Clean up since we're not proceeding with reconstruction
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
+            }
             return
         }
+        
         print("--- ContentView: Found matching message and primary URL. Starting reconstruction for \(transferID).")
         viewModel.isLoading = true
         viewModel.processingTransferIDs.insert(transferID)
+        
         Task {
             defer {
                 Task { @MainActor in
@@ -723,36 +915,34 @@ struct ChatTabView: View {
                     print("--- ContentView: Removed transferID \(transferID) from processing set.")
                 }
             }
+            
             do {
-                guard url.startAccessingSecurityScopedResource() else {
-                    print("--- ContentView ERROR: Cannot access security scoped resource for URL: \(url.path)")
-                    throw FileTransmissionService.FileError.accessDenied(url.lastPathComponent)
-                }
-                defer {
-                    url.stopAccessingSecurityScopedResource()
-                }
-                let secondaryPackageData: Data
-                do {
-                    secondaryPackageData = try Data(contentsOf: url)
-                } catch {
-                    print("--- ContentView ERROR: Failed to read secondary package data: \(error.localizedDescription)")
-                    throw FileTransmissionService.FileError.readError(error.localizedDescription)
-                }
+                let secondaryPackageData = try Data(contentsOf: sandboxedURL)
                 let decryptedFileURL = try await FileTransmissionService.shared.reconstructAndDecryptFile(
                     primaryPartURL: primaryURL,
                     secondaryPackageData: secondaryPackageData
                 )
+                
                 try? await Task.sleep(nanoseconds: 100_000_000)
+                
                 await MainActor.run {
                     print("--- ContentView: File reconstruction SUCCESS! Decrypted file at: \(decryptedFileURL.path)")
                     viewModel.updateMessageAfterReconstruction(transferID: transferID, decryptedFileURL: decryptedFileURL)
-                    // Добавляю в историю открытых файлов
-                    let openedFile = OpenedFile(id: UUID(), filename: decryptedFileURL.lastPathComponent, url: decryptedFileURL, dateOpened: Date())
+                    let openedFile = OpenedFile(url: decryptedFileURL, fileName: decryptedFileURL.lastPathComponent)
                     OpenedFilesHistory.shared.add(openedFile)
-                    // Show a standard alert that the user dismisses
-                    viewModel.alertMessage = "File successfully reconstructed!"
-                    viewModel.alertType = nil
-                    viewModel.showAlert = true
+                    fileContentPreview = nil
+                    
+                    let textExtensions = ["txt", "log", "md", "json", "xml", "html", "css", "js", "swift", "py", "java", "c", "cpp", "h", "hpp"]
+                    let ext = decryptedFileURL.pathExtension.lowercased()
+                    if FileManager.default.fileExists(atPath: decryptedFileURL.path) {
+                        if textExtensions.contains(ext) {
+                            fileContentPreview = try? String(contentsOf: decryptedFileURL, encoding: .utf8)
+                        } else {
+                            viewModel.alertMessage = "File successfully reconstructed! Would you like to open it?"
+                            viewModel.alertType = .fileAlreadyProcessed
+                            viewModel.showAlert = true
+                        }
+                    }
                     print("--- ContentView: Message updated with decrypted file URL (after delay)")
                 }
             } catch {
@@ -762,6 +952,12 @@ struct ChatTabView: View {
                     viewModel.alertType = nil
                     viewModel.showAlert = true
                 }
+            }
+            
+            // Clean up after reconstruction is complete
+            url.stopAccessingSecurityScopedResource()
+            if needsCleanup {
+                try? FileManager.default.removeItem(at: sandboxedURL)
             }
         }
     }
@@ -1252,38 +1448,6 @@ struct SecuritySettingsView: View {
                 // Ensure ViewModel settings reflect the current state when view appears
                 // This is mostly handled by @StateObject and @Published
             }
-        }
-    }
-}
-
-enum SecurityLevel: Int, CaseIterable, Identifiable {
-    case standard
-    case enhanced
-    case maximum
-    
-    var id: Int { rawValue }
-    
-    var description: String {
-        switch self {
-        case .standard: return "Standard"
-        case .enhanced: return "Enhanced"
-        case .maximum: return "Maximum"
-        }
-    }
-    
-    var iconName: String {
-        switch self {
-        case .standard: return "shield"
-        case .enhanced: return "shield.lefthalf.filled"
-        case .maximum: return "shield.fill"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .standard: return .blue
-        case .enhanced: return .orange
-        case .maximum: return .red
         }
     }
 }

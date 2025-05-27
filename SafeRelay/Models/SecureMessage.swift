@@ -5,17 +5,25 @@ struct SecureMessage: Identifiable, Codable {
     let id: UUID
     let content: String
     let timestamp: Date
+    let isFromCurrentUser: Bool
     let isEncrypted: Bool
-    let tokenizedContent: String?
+    var tokenizedContent: String?
+    var tokens: [String: String]?
     let primaryPartURLString: String?
     let secondaryPackageURLString: String?
     let transferID: String?
-    var decryptedFileURL: URL?
+    var decryptedFileURLString: String?
     var originalFilename: String?
+    
+    var decryptedFileURL: URL? {
+        get { decryptedFileURLString.flatMap { URL(string: $0) } }
+        set { decryptedFileURLString = newValue?.absoluteString }
+    }
     
     init(
         content: String,
-        isEncrypted: Bool,
+        isFromCurrentUser: Bool = true,
+        isEncrypted: Bool = true,
         tokenizedContent: String? = nil,
         primaryPartURLString: String? = nil,
         secondaryPackageURLString: String? = nil,
@@ -26,12 +34,13 @@ struct SecureMessage: Identifiable, Codable {
         self.id = UUID()
         self.content = content
         self.timestamp = Date()
+        self.isFromCurrentUser = isFromCurrentUser
         self.isEncrypted = isEncrypted
         self.tokenizedContent = tokenizedContent
         self.primaryPartURLString = primaryPartURLString
         self.secondaryPackageURLString = secondaryPackageURLString
         self.transferID = transferID
-        self.decryptedFileURL = decryptedFileURL
+        self.decryptedFileURLString = decryptedFileURL?.absoluteString
         self.originalFilename = originalFilename
     }
     
@@ -44,7 +53,14 @@ struct SecureMessage: Identifiable, Codable {
         // Implementation for data tokenization
         return self
     }
-}
+    
+    // Для тестирования
+    static let sampleMessages = [
+        SecureMessage(content: "Hello!", isFromCurrentUser: true),
+        SecureMessage(content: "Hi there!", isFromCurrentUser: false),
+        SecureMessage(content: "How are you?", isFromCurrentUser: true)
+    ]
+} 
 
 extension SecureMessage {
     var isSplit: Bool {

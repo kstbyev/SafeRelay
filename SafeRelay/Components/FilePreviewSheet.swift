@@ -13,6 +13,8 @@ struct FilePreviewSheet: View {
     var previewFileIcon: String
     @Binding var showPreview: Bool
     var fileURL: URL? = nil
+    
+    
 
     var body: some View {
         VStack {
@@ -132,3 +134,4 @@ struct AuthorSignatureView: View {
         }
     }
 } 
+ 

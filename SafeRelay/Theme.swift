@@ -55,18 +55,18 @@ struct Theme {
 
     // MARK: - Neumorphic Modifier
     struct Neumorphic: ViewModifier {
-        func body(content: Content) -> some View {
-            content
+    func body(content: Content) -> some View {
+        content
                 .background(Theme.card)
                 .cornerRadius(Theme.cornerRadius)
                 .shadow(color: Theme.shadowLight, radius: Theme.shadowRadius, x: -Theme.shadowOffset, y: -Theme.shadowOffset)
                 .shadow(color: Theme.shadowDark, radius: Theme.shadowRadius, x: Theme.shadowOffset, y: Theme.shadowOffset)
-        }
     }
+}
 
     // MARK: - Button Style
     struct CustomButton: ViewModifier {
-        let isPrimary: Bool
+    let isPrimary: Bool
         func body(content: Content) -> some View {
             content
                 .padding(.horizontal, Theme.elementSpacing)
@@ -81,14 +81,14 @@ struct Theme {
     // MARK: - Message Bubble Style
     struct MessageBubble: ViewModifier {
         let isEncrypted: Bool
-        func body(content: Content) -> some View {
-            content
+    func body(content: Content) -> some View {
+        content
                 .padding(.horizontal, Theme.elementSpacing)
                 .padding(.vertical, Theme.smallSpacing)
-                .background(
+            .background(
                     RoundedRectangle(cornerRadius: Theme.cornerRadius)
                         .fill(isEncrypted ? Theme.accent.opacity(0.08) : Theme.card)
-                )
+            )
                 .shadow(color: Theme.shadowDark.opacity(0.08), radius: 2, x: 0, y: 1)
         }
     }
