@@ -36,3 +36,4 @@ enum SensitiveData: CustomStringConvertible {
         return text.range(of: self.value, options: .literal)
     }
 } 
+

@@ -16,6 +16,12 @@ struct ShareableURL: Identifiable {
     let url: URL
 }
 
+// Add a wrapper for reconstructed file URLs
+struct ReconstructedFileURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct ContentView: View {
     @StateObject private var viewModel = SafeRelayViewModel()
     @State private var messageText = ""
@@ -29,6 +35,7 @@ struct ContentView: View {
     @State private var selectedTab: Int = 0
     @State private var showSplash = true
     @AppStorage("appColorScheme") private var appColorScheme: String = "system"
+    @State private var reconstructedFileURL: ReconstructedFileURL?
     
     let tabItems: [(icon: String, label: String)] = [
         ("bubble.left.and.bubble.right.fill", "Chats"),
@@ -73,10 +80,68 @@ struct ContentView: View {
                 .padding()
             }
         }
+        .sheet(item: $reconstructedFileURL) { item in
+            let url = item.url
+            VStack(spacing: 20) {
+                Image(systemName: "doc.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.accentColor)
+                Text("Файл успешно восстановлен!")
+                    .font(.headline)
+                Button(action: {
+                    UIApplication.shared.open(url)
+                    reconstructedFileURL = nil
+                }) {
+                    Label("Open File", systemImage: "arrow.up.right.square")
+                        .font(.title2)
+                        .padding()
+                        .background(Color.accentColor.opacity(0.15))
+                        .cornerRadius(12)
+                }
+                Button("Закрыть", role: .cancel) {
+                    reconstructedFileURL = nil
+                }
+            }
+            .padding()
+        }
         .onOpenURL { url in
             if url.pathExtension.lowercased() == "saferelaypkg" {
                 handleIncomingURL(url)
             }
+        }
+        .alert(isPresented: $viewModel.showAlert) {
+            let alertTitle: String
+            switch viewModel.alertType {
+            case .sensitiveData:
+                alertTitle = "Sensitive Data Detected"
+            case .phishing:
+                alertTitle = "Phishing Warning"
+            case .fileAlreadyProcessed, nil:
+                alertTitle = "File Handling"
+            }
+            return Alert(
+                title: Text(alertTitle),
+                message: Text(viewModel.alertMessage ?? ""),
+                primaryButton: viewModel.alertType == .sensitiveData ? .default(Text("Tokenize and Send")) {
+                    let textToSend = messageText
+                    Task {
+                        await viewModel.tokenizeAndSendMessage(textToSend)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            messageText = ""
+                            isComposing = false
+                        }
+                    }
+                } : .default(Text("OK")),
+                secondaryButton: viewModel.alertType == .sensitiveData ? .destructive(Text("Send Anyway")) {
+                    Task {
+                        await viewModel.confirmAndSendPendingMessage()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            messageText = ""
+                            isComposing = false
+                        }
+                    }
+                } : .cancel(Text("Cancel"))
+            )
         }
     }
     
@@ -93,6 +158,7 @@ struct ContentView: View {
                         isComposing: $isComposing,
                         shareablePackage: $shareablePackage,
                         fileContentPreview: $fileContentPreview,
+                        reconstructedFileURL: $reconstructedFileURL,
                         onProfile: { selectedTab = 3 },
                         onSettings: { selectedTab = 2 }
                     )
@@ -168,7 +234,6 @@ struct ContentView: View {
             }
             CustomTabBar(selectedTab: $selectedTab, tabItems: tabItems, appColorScheme: $appColorScheme)
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
     private func handleSendMessage() {
@@ -202,7 +267,7 @@ struct ContentView: View {
                 }
                 Button("Send Anyway", role: .destructive) {
                     Task {
-                        await viewModel.sendMessage(messageText)
+                        await viewModel.confirmAndSendPendingMessage()
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             messageText = ""
                             isComposing = false
@@ -241,6 +306,7 @@ struct ContentView: View {
         switch result {
         case .success(let urls):
             if let url = urls.first {
+                // Обычный импорт файла
                 Task {
                     await viewModel.sendFile(url)
                 }
@@ -350,17 +416,11 @@ struct ContentView: View {
                     }
                 }
             } else {
-                Task { @MainActor in
-                    viewModel.alertMessage = "Primary part for this file is missing or inaccessible. Please re-import or resend the main part."
-                    viewModel.alertType = nil
-                    viewModel.showAlert = true
-                }
-                
-                // Clean up if we're not proceeding with reconstruction
-                url.stopAccessingSecurityScopedResource()
-                if needsCleanup {
-                    try? FileManager.default.removeItem(at: sandboxedURL)
-                }
+                viewModel.alertMessage = "Основная часть файла (primary part) не найдена. Пожалуйста, выберите файл primary_... для восстановления."
+                viewModel.alertType = nil
+                viewModel.showAlert = true
+                self.reconstructedFileURL = ReconstructedFileURL(url: sandboxedURL)
+                return
             }
             return
         }
@@ -385,6 +445,7 @@ struct ContentView: View {
             if needsCleanup {
                 try? FileManager.default.removeItem(at: sandboxedURL)
             }
+            self.reconstructedFileURL = ReconstructedFileURL(url: decryptedURL)
             return
         }
         
@@ -446,6 +507,7 @@ struct ContentView: View {
                     }
                     print("--- ContentView: Message updated with decrypted file URL (after delay)")
                 }
+                self.reconstructedFileURL = ReconstructedFileURL(url: decryptedFileURL)
             } catch {
                 await MainActor.run {
                     print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
@@ -527,6 +589,7 @@ struct ChatTabView: View {
     @Binding var isComposing: Bool
     @Binding var shareablePackage: ShareableURL?
     @Binding var fileContentPreview: String?
+    @Binding var reconstructedFileURL: ReconstructedFileURL?
     @State private var tokenizedText = ""
     @State private var tokens: [String: String] = [:]
     @State private var isAtBottom: Bool = true
@@ -671,7 +734,6 @@ struct ChatTabView: View {
                 .background(Color(.systemGray6))
             }
             .background(Theme.background)
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationBarHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -740,6 +802,7 @@ struct ChatTabView: View {
         switch result {
         case .success(let urls):
             if let url = urls.first {
+                // Обычный импорт файла
                 Task {
                     await viewModel.sendFile(url)
                 }
@@ -849,17 +912,11 @@ struct ChatTabView: View {
                     }
                 }
             } else {
-                Task { @MainActor in
-                    viewModel.alertMessage = "Primary part for this file is missing or inaccessible. Please re-import or resend the main part."
-                    viewModel.alertType = nil
-                    viewModel.showAlert = true
-                }
-                
-                // Clean up if we're not proceeding with reconstruction
-                url.stopAccessingSecurityScopedResource()
-                if needsCleanup {
-                    try? FileManager.default.removeItem(at: sandboxedURL)
-                }
+                viewModel.alertMessage = "Основная часть файла (primary part) не найдена. Пожалуйста, выберите файл primary_... для восстановления."
+                viewModel.alertType = nil
+                viewModel.showAlert = true
+                self.reconstructedFileURL = ReconstructedFileURL(url: sandboxedURL)
+                return
             }
             return
         }
@@ -884,6 +941,7 @@ struct ChatTabView: View {
             if needsCleanup {
                 try? FileManager.default.removeItem(at: sandboxedURL)
             }
+            self.reconstructedFileURL = ReconstructedFileURL(url: decryptedURL)
             return
         }
         
@@ -945,6 +1003,7 @@ struct ChatTabView: View {
                     }
                     print("--- ContentView: Message updated with decrypted file URL (after delay)")
                 }
+                self.reconstructedFileURL = ReconstructedFileURL(url: decryptedFileURL)
             } catch {
                 await MainActor.run {
                     print("--- ContentView ERROR: File reconstruction failed: \(error.localizedDescription)")
@@ -1533,7 +1592,7 @@ struct SplashScreenView: View {
                 }
                 Spacer()
                 if showSignature {
-                    Text("by Madi Sharipov")
+                    Text("by kstbyev MS")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.secondary)
                         .opacity(0.8)

@@ -45,6 +45,8 @@ class SafeRelayViewModel: ObservableObject {
     private var dbManager = DatabaseManager.shared
     private var cancellables = Set<AnyCancellable>()
     
+    @Published var pendingSensitiveMessage: String? = nil
+    
     init() {
         loadSettings()
         loadMessages() // Now this should work
@@ -108,48 +110,35 @@ class SafeRelayViewModel: ObservableObject {
     }
     
     // Returns true if the message was sent directly, false if an alert was shown
-    func sendMessage(_ content: String) async -> Bool {
+    func sendMessage(_ content: String, force: Bool = false) async -> Bool {
         isLoading = true
         defer { isLoading = false }
 
-        // --- Maximum Level Enforcement ---
-        if securityLevel == SecurityLevel.maximum {
-            isEncryptionEnabled = true // Ensure encryption is always on
+        if securityLevel == .maximum {
+            isEncryptionEnabled = true
         }
 
-        // --- Phishing Detection (Enhanced & Maximum) ---
-        if securityLevel == .enhanced || securityLevel == SecurityLevel.maximum {
-            let phishingDetected = DataProtectionService.shared.detectPhishing(content)
-            if !phishingDetected.isEmpty {
-                alertMessage = "Potential phishing attempt detected: \(phishingDetected.joined(separator: ", ")). Send anyway?"
-                alertType = .phishing
-                showAlert = true
-                print("--- DEBUG: Phishing detected: [\(phishingDetected)] ---")
-                return false // Show alert, don't send yet
-            }
-        }
-
-        // --- Sensitive Data Detection ---
         let detectedData = DataProtectionService.shared.detectSensitiveData(content)
-        if !detectedData.isEmpty && !autoTokenize && securityLevel != SecurityLevel.maximum {
-            // Ask user if not auto-tokenizing and not Maximum level
-            alertMessage = "Sensitive data detected. Tokenize before sending?"
+        if !detectedData.isEmpty && securityLevel == .standard && !force {
+            // Сохраняем сообщение для повторной отправки после подтверждения
+            pendingSensitiveMessage = content
+            alertMessage = "Sensitive data detected. Are you sure you want to send this message?"
             alertType = .sensitiveData
             showAlert = true
-            print("--- DEBUG: Sensitive data detected, showing alert (Manual/Standard/Enhanced) ---")
-            return false // Show alert, don't send yet
-        } else if !detectedData.isEmpty && (autoTokenize || securityLevel == SecurityLevel.maximum) {
-            // Auto-tokenize or force tokenize on Maximum
+            print("--- DEBUG: Sensitive data detected, showing alert (Standard) ---")
+            return false
+        } else if !detectedData.isEmpty && (securityLevel == .enhanced || securityLevel == .maximum) {
             print("--- DEBUG: Sensitive data detected, auto/force tokenizing (Level: \(securityLevel)) ---")
             await tokenizeAndSendMessage(content)
             updateSecurityAnalytics()
-            return true // Message sent after tokenization
+            pendingSensitiveMessage = nil
+            return true
         } else {
-            // No sensitive data or already handled
             print("--- DEBUG: No sensitive data detected or handled, sending directly ---")
             createAndSaveMessage(content: content, tokenizedContent: nil, tokens: [:], originalFilename: nil)
             updateSecurityAnalytics()
-            return true // Message sent directly
+            pendingSensitiveMessage = nil
+            return true
         }
     }
     
@@ -250,8 +239,7 @@ class SafeRelayViewModel: ObservableObject {
                     messageContent += " (Split & Encrypted)"
                     // Simulate "sending" primary part (e.g., confirm existence)
                     try await FileTransmissionService.shared.transmitPrimaryPart(url: primaryPartURL)
-                    // Prepare alert for user to handle secondary package
-                    alertMessage = "File split and encrypted. Main part sent (simulated). Please share the secondary package separately."
+                    // (NO ALERT HERE)
                 } else {
                     // Split only (Encryption logic might need refinement here if needed)
                     // For simplicity, we assume splitting implies encryption for now
@@ -265,29 +253,25 @@ class SafeRelayViewModel: ObservableObject {
                  alertMessage = "Encrypting single file not implemented yet."
                  showAlert = true
                  return
-            } else {
-                 // Send as is (Placeholder - needs implementation)
-                 messageContent += " (Plain - TBD)"
-                 alertMessage = "Sending plain file not implemented yet."
-                 showAlert = true
-                 return
             }
             
-            // Create the message entry, passing the transferID and original filename
-            createAndSaveMessage(
+            // Create the message entry directly without going through sendMessage
+            let message = SecureMessage(
                 content: messageContent,
+                isEncrypted: shouldEncrypt,
                 tokenizedContent: nil,
-                tokens: [:],
                 primaryPartURLString: primaryURLString,
                 secondaryPackageURLString: secondaryURLString,
-                transferID: currentTransferID, // Pass the ID
-                originalFilename: fileURL.lastPathComponent // <-- Pass the original filename
+                transferID: currentTransferID,
+                originalFilename: fileURL.lastPathComponent
             )
             
-            // Show confirmation / instruction alert
-            alertType = nil // Just an informational alert
-            showAlert = true // Alert message set within the if/else block
-
+            // Add message directly to the array and save to DB
+            messages.append(message)
+            if saveToDevice || securityLevel != SecurityLevel.maximum {
+                dbManager.saveMessage(message)
+            }
+            // (NO ALERT HERE)
         } catch {
             print("--- ViewModel ERROR: Failed to process file: \(error.localizedDescription) ---")
             alertMessage = "Error processing file: \(error.localizedDescription)"
@@ -366,6 +350,12 @@ class SafeRelayViewModel: ObservableObject {
         protectedMessagesCount = messages.filter { $0.isEncrypted }.count
         encryptedFilesCount = messages.filter { $0.primaryPartURLString != nil && $0.isEncrypted }.count
         tokensFoundCount = messages.filter { $0.tokenizedContent != nil }.count
+    }
+    
+    func confirmAndSendPendingMessage() async {
+        if let pending = pendingSensitiveMessage {
+            await sendMessage(pending, force: true)
+        }
     }
 }
 
